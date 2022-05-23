@@ -12,8 +12,7 @@ import com.sun.jna.win32.W32APIOptions;
 import java.util.ArrayList;
 import java.util.List;
 
-import static com.sun.jna.platform.win32.WinNT.PROCESS_QUERY_INFORMATION;
-import static com.sun.jna.platform.win32.WinNT.PROCESS_VM_READ;
+import static com.sun.jna.platform.win32.WinNT.*;
 
 public class WinUtils {
 
@@ -49,6 +48,8 @@ public class WinUtils {
 
         WinNT.HANDLE OpenProcess(int fdwAccess, boolean fInherit, int IDProcess);
 
+        WinNT.HANDLE GetCurrentProcess ();
+
         void CloseHandle(WinNT.HANDLE handle);
     }
 
@@ -68,14 +69,16 @@ public class WinUtils {
     }
 
     public static List<Integer> findPidsMatching(String name) {
-        int[] processlist = new int[2048];
-        int[] dummylist = new int[1024];
+        int[] processlist = new int[5012];
+        int[] dummylist = new int[5012];
         List<Integer> pidsBS = new ArrayList<>(5);
-        WinUtils.Psapi.INSTANCE.EnumProcesses(processlist, 2048, dummylist);
+        WinUtils.Psapi.INSTANCE.EnumProcesses(processlist, 5012, dummylist);
+
+        boolean enableDebugPrivilege = WinUtils.enableDebugPrivilege();
 
         //FIXME improve to better filter out
-        for (int pid : processlist) {
-            WinNT.HANDLE ph = com.sun.jna.platform.win32.Kernel32.INSTANCE.OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, pid);
+        for (int i=0 ; i<processlist.length; i++) {
+            WinNT.HANDLE ph = com.sun.jna.platform.win32.Kernel32.INSTANCE.OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ , false, processlist[i]);
             if (ph != null) {
 
                 byte[] buffer = new byte[1024];
@@ -84,12 +87,46 @@ public class WinUtils {
 
 
                 if (processName.contains(name)) {
-                    pidsBS.add(pid);
+                    pidsBS.add(processlist[i]);
                 }
                 com.sun.jna.platform.win32.Kernel32.INSTANCE.CloseHandle(ph);
             }
         }
         return pidsBS;
+    }
+
+    /**
+     * Enables debug privileges for this process, required for OpenProcess() to get
+     * processes other than the current user
+     *
+     * @return {@code true} if debug privileges were successfully enabled.
+     */
+    private static boolean enableDebugPrivilege() {
+        HANDLEByReference hToken = new HANDLEByReference();
+        boolean success = Advapi32.INSTANCE.OpenProcessToken(Kernel32.INSTANCE.GetCurrentProcess(),
+                WinNT.TOKEN_QUERY | WinNT.TOKEN_ADJUST_PRIVILEGES, hToken);
+        if (!success) {
+            return false;
+        }
+        try {
+            WinNT.LUID luid = new WinNT.LUID();
+            success = Advapi32.INSTANCE.LookupPrivilegeValue(null, WinNT.SE_DEBUG_NAME, luid);
+            if (!success) {
+                return false;
+            }
+            WinNT.TOKEN_PRIVILEGES tkp = new WinNT.TOKEN_PRIVILEGES(1);
+            tkp.Privileges[0] = new WinNT.LUID_AND_ATTRIBUTES(luid, new DWORD(WinNT.SE_PRIVILEGE_ENABLED));
+            success = Advapi32.INSTANCE.AdjustTokenPrivileges(hToken.getValue(), false, tkp, 0, null, null);
+            int err = Native.getLastError();
+            if (!success) {
+                return false;
+            } else if (err == WinError.ERROR_NOT_ALL_ASSIGNED) {
+                return false;
+            }
+        } finally {
+            Kernel32.INSTANCE.CloseHandle(hToken.getValue());
+        }
+        return true;
     }
 
     public static List<WindowInfo> findAllWindowsMatching(List<Integer> pids, List<String> titlesFilter) {
