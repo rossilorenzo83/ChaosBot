@@ -14,9 +14,9 @@ public class Config {
 
     //Depends on client used
     public static String PID_NAME = "BlueStacks_nxt"; //Warhammer Chaos
-    public static List<String> WINDOWS_NAMES = List.of("Deciphere"/*, "Betafarm anew", "Meph a new", "Conquest"*/);
-    public static Integer MARCH_AVAILABLE = 2;
+    public static List<String> WINDOWS_NAMES = List.of("Deciphere", "Betafarm anew"/*, "Meph a new", "Conquest"*/);
+    public static Integer MARCH_AVAILABLE = 3;
     public static Locale GAME_LANGUAGE = Locale.FRENCH;
     //1h
-    public static Long TIME_INTERVAL_MILLIS = 1000*60*2L;
+    public static Long TIME_INTERVAL_MILLIS = 1000*60*60L;
 }
