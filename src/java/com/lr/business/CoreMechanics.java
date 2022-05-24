@@ -2,6 +2,7 @@ package com.lr.business;
 
 
 import com.lr.utils.WinUtils;
+import lombok.extern.slf4j.Slf4j;
 import org.opencv.core.Mat;
 import org.opencv.imgcodecs.Imgcodecs;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,13 +16,15 @@ import java.util.Map;
 import static com.lr.utils.ScreenUtils.findCoordsOnScreen;
 import static com.lr.utils.ScreenUtils.takeScreenCapture;
 import static java.awt.event.InputEvent.BUTTON1_DOWN_MASK;
-import static org.opencv.imgproc.Imgproc.COLOR_RGB2BGR;
+import static org.opencv.imgcodecs.Imgcodecs.IMREAD_COLOR;
 
 @Component
+@Slf4j
 public class CoreMechanics {
 
 
     private Robot robot;
+    public static int CONVERT_IMG_FLAG = IMREAD_COLOR;
 
     public void setMainMapButtonsCoordsMap(Map<MainMapButtons, Double[]> mainMapButtonsCoordsMap) {
         this.mainMapButtonsCoordsMap = mainMapButtonsCoordsMap;
@@ -35,73 +38,83 @@ public class CoreMechanics {
     }
 
 
-    public void findAndFarm(int rssLevel, RssType rssType, WinUtils.WindowInfo windowInfo) throws InterruptedException, AWTException, IOException, URISyntaxException {
+    public void findAndFarm(int rssLevel, RssType rssType, WinUtils.WindowInfo windowInfo, boolean hasEncampment) throws InterruptedException, AWTException, IOException, URISyntaxException {
 
         //gotoMainMap with keystroke
 
         moveAndClick(mainMapButtonsCoordsMap.get(MainMapButtons.SEARCH));
 
         String searchViewPath = takeScreenCapture(windowInfo);
-        Mat searchScreen = Imgcodecs.imread(searchViewPath, COLOR_RGB2BGR);
+        Mat searchScreen = Imgcodecs.imread(searchViewPath, CONVERT_IMG_FLAG);
 
-        Double[] rssExpander = findCoordsOnScreen(SearchViewButtons.SEARCH_EXPANDER.getImgPath(), searchScreen, windowInfo);
+        try {
 
-        moveAndClick(rssExpander);
+            Double[] rssExpander = findCoordsOnScreen(SearchViewButtons.SEARCH_EXPANDER.getImgPath(), searchScreen, windowInfo);
 
-        searchViewPath = takeScreenCapture(windowInfo);
-        searchScreen = Imgcodecs.imread(searchViewPath, COLOR_RGB2BGR);
+            moveAndClick(rssExpander);
 
-        Double[] rssTypeChoice = findCoordsOnScreen(SearchViewButtons.getEnumFromRssType(rssType).getImgPath(), searchScreen, windowInfo);
-        System.out.println("Coords for rss expander for rss " + rssType + " found at:" + rssTypeChoice);
-        moveAndClick(rssTypeChoice);
+            searchViewPath = takeScreenCapture(windowInfo);
+            searchScreen = Imgcodecs.imread(searchViewPath, CONVERT_IMG_FLAG);
 
-        Double[] searchOnMapCoords = findCoordsOnScreen(SearchViewButtons.SEARCH_MAP.getImgPath(), searchScreen, windowInfo);
-        moveAndClick(searchOnMapCoords);
+            Double[] rssTypeChoice = findCoordsOnScreen(SearchViewButtons.getEnumFromRssType(rssType).getImgPath(), searchScreen, windowInfo);
+            log.info("Coords for rss expander for rss {} found at: {}" ,rssType, rssTypeChoice);
+            moveAndClick(rssTypeChoice);
 
-        String searchResultsPath = takeScreenCapture(windowInfo);
-        Mat searchResultsScreen = Imgcodecs.imread(searchResultsPath, COLOR_RGB2BGR);
+            Double[] searchOnMapCoords = findCoordsOnScreen(SearchViewButtons.SEARCH_MAP.getImgPath(), searchScreen, windowInfo);
+            moveAndClick(searchOnMapCoords);
 
-        Double[] goCoords = findCoordsOnScreen(SearchViewButtons.GO_RSS.getImgPath(), searchResultsScreen, windowInfo);
-        moveAndClick(goCoords);
+            String searchResultsPath = takeScreenCapture(windowInfo);
+            Mat searchResultsScreen = Imgcodecs.imread(searchResultsPath, CONVERT_IMG_FLAG);
 
-        // Now on map
+            Double[] goCoords = findCoordsOnScreen(SearchViewButtons.GO_RSS.getImgPath(), searchResultsScreen, windowInfo);
+            moveAndClick(goCoords);
 
-        String mapPath = takeScreenCapture(windowInfo);
-        Mat mapScreen = Imgcodecs.imread(mapPath, COLOR_RGB2BGR);
-
-        Double[] rssSource = findCoordsOnScreen(SearchViewButtons.getEnumFromRssType(rssType).getOnMapIconPath(), mapScreen, windowInfo);
-        moveAndClick(rssSource);
-
-        mapPath = takeScreenCapture(windowInfo);
-        mapScreen = Imgcodecs.imread(mapPath, COLOR_RGB2BGR);
-
-        Double[] rssCollectSource = findCoordsOnScreen(SearchViewButtons.getEnumFromRssType(rssType).getOnMapCollectButtonPath(), mapScreen, windowInfo);
-        moveAndClick(rssCollectSource);
+            // Now on map
 
 
-        // Now on army selector view
 
-        String armySelectionPath = takeScreenCapture(windowInfo);
-        Mat armySelectionScreen = Imgcodecs.imread(mapPath, COLOR_RGB2BGR);
 
-        Double[] armyPresetCoords = findCoordsOnScreen(ExpeditionViewButtons.PRESET_ICON.getImgPath(), armySelectionScreen, windowInfo);
-        moveAndClick(armyPresetCoords);
+            String mapPath = takeScreenCapture(windowInfo);
+            Mat mapScreen = Imgcodecs.imread(mapPath, CONVERT_IMG_FLAG);
 
-        String armyPresetsPath = takeScreenCapture(windowInfo);
-        Mat armyPresetsScreen = Imgcodecs.imread(mapPath, COLOR_RGB2BGR);
-        Double[] armyPresetGatheringCoords = findCoordsOnScreen(ExpeditionViewButtons.PRESET_RADIO.getImgPath(), armyPresetsScreen, windowInfo);
-        moveAndClick(armyPresetGatheringCoords);
+            Double[] rssSource = findCoordsOnScreen(SearchViewButtons.getEnumFromRssType(rssType).getOnMapIconPath(), mapScreen, windowInfo);
+            moveAndClick(rssSource);
 
-        armySelectionPath = takeScreenCapture(windowInfo);
-        armySelectionScreen = Imgcodecs.imread(mapPath, COLOR_RGB2BGR);
+            mapPath = takeScreenCapture(windowInfo);
+            mapScreen = Imgcodecs.imread(mapPath, CONVERT_IMG_FLAG);
 
-        Double[] launchCoords = findCoordsOnScreen(ExpeditionViewButtons.LAUNCH_EXPEDITION_BUTTON.getImgPath(), armySelectionScreen, windowInfo);
-        moveAndClick(launchCoords);
+            Double[] rssCollectSource = findCoordsOnScreen(SearchViewButtons.getEnumFromRssType(rssType).getOnMapCollectButtonPath(), mapScreen, windowInfo);
+            moveAndClick(rssCollectSource);
 
+
+            // Now on army selector view
+            //FIXME cover the extra screen in case of encampement built
+
+            String armySelectionPath = takeScreenCapture(windowInfo);
+            Mat armySelectionScreen = Imgcodecs.imread(mapPath, CONVERT_IMG_FLAG);
+
+            Double[] armyPresetCoords = findCoordsOnScreen(ExpeditionViewButtons.PRESET_ICON.getImgPath(), armySelectionScreen, windowInfo);
+            moveAndClick(armyPresetCoords);
+
+            String armyPresetsPath = takeScreenCapture(windowInfo);
+            Mat armyPresetsScreen = Imgcodecs.imread(mapPath, CONVERT_IMG_FLAG);
+            Double[] armyPresetGatheringCoords = findCoordsOnScreen(ExpeditionViewButtons.PRESET_RADIO.getImgPath(), armyPresetsScreen, windowInfo);
+            moveAndClick(armyPresetGatheringCoords);
+
+            armySelectionPath = takeScreenCapture(windowInfo);
+            armySelectionScreen = Imgcodecs.imread(mapPath, CONVERT_IMG_FLAG);
+
+            Double[] launchCoords = findCoordsOnScreen(ExpeditionViewButtons.LAUNCH_EXPEDITION_BUTTON.getImgPath(), armySelectionScreen, windowInfo);
+            moveAndClick(launchCoords);
+        }
+        catch(ImageNotMatchedException e){
+            log.error(e.getMessage());
+
+        }
         //Back to main screen
         Thread.sleep(2000);
 
-        System.out.println("Done with findAndFarm");
+        log.info("Done with findAndFarm");
 
     }
 
@@ -109,7 +122,7 @@ public class CoreMechanics {
         robot.mouseMove(coords[0].intValue(), coords[1].intValue());
         robot.mousePress(BUTTON1_DOWN_MASK);
         robot.mouseRelease(BUTTON1_DOWN_MASK);
-        Thread.sleep(2000);
+        Thread.sleep(5000);
 
     }
 

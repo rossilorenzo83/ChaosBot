@@ -86,6 +86,7 @@ public class WinUtils {
                 String processName = Native.toString(buffer);
 
 
+                //FIXME add multiple names support
                 if (processName.contains(name)) {
                     pidsBS.add(processlist[i]);
                 }
