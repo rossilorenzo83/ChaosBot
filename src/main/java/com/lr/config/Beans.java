@@ -5,6 +5,8 @@ import org.springframework.context.annotation.Configuration;
 
 import java.awt.*;
 import java.util.Random;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 @Configuration
 public class Beans {
@@ -19,4 +21,8 @@ public class Beans {
         return new Random();
     }
 
+    @Bean
+    public ExecutorService getThreadPool(){
+        return Executors.newFixedThreadPool(Config.WINDOWS_NAMES.size());
+    }
 }
