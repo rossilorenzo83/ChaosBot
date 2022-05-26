@@ -22,6 +22,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 
 import static com.lr.business.CoreMechanics.CONVERT_IMG_FLAG;
@@ -31,9 +33,6 @@ import static com.lr.utils.ScreenUtils.takeScreenCapture;
 @SpringBootApplication
 @Slf4j
 public class ChaosBot implements CommandLineRunner {
-
-    private Map<MainMapButtons, Double[]> buttonCoords;
-    private Boolean hasEncampments = true;
 
     @Autowired
     CoreMechanics coreMechanics;
@@ -50,7 +49,6 @@ public class ChaosBot implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        this.buttonCoords = new HashMap<>();
 
         System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
         List<Integer> pidsBS = WinUtils.findPidsMatching(Config.PID_NAME);
@@ -83,12 +81,14 @@ public class ChaosBot implements CommandLineRunner {
             String fullImagePath = takeScreenCapture(windowInfo);
             Mat fullScreen = Imgcodecs.imread(fullImagePath, CONVERT_IMG_FLAG);
             log.info("Loaded image dimensions" + fullScreen.size().toString());
+            Map<MainMapButtons, Double[]> currentWindowCoords = new HashMap<>();
+            Boolean hasEncampments = true;
 
             for (MainMapButtons mainMapButton : MainMapButtons.values()) {
                 log.info("Searching coords for control:" + mainMapButton.name());
                 try {
                     Double[] absCoords = findCoordsOnScreen(mainMapButton.getImgPath(), fullScreen, windowInfo);
-                    this.buttonCoords.put(mainMapButton, absCoords);
+                    currentWindowCoords.put(mainMapButton, absCoords);
                 } catch (ImageNotMatchedException e) {
                     if (mainMapButton.equals(MainMapButtons.ENCAMPMENTS)) {
                         hasEncampments = false;
@@ -100,7 +100,10 @@ public class ChaosBot implements CommandLineRunner {
 
             }
 
-            coreMechanics.setMainMapButtonsCoordsMap(this.buttonCoords);
+            ConcurrentMap<String, Map<MainMapButtons, Double[]>> existingCoordsMap = this.coreMechanics.getMainMapButtonsCoordsMap();
+            existingCoordsMap.put(windowInfo.toString(), currentWindowCoords);
+            coreMechanics.setMainMapButtonsCoordsMap(existingCoordsMap);
+
             Long timeLastActionPerformed = System.currentTimeMillis();
             while (true) {
                 // Castle coords
@@ -109,7 +112,7 @@ public class ChaosBot implements CommandLineRunner {
 
                 if (availMarches == 0 && (System.currentTimeMillis() - timeLastActionPerformed) > Config.TIME_INTERVAL_MILLIS) {
                     log.info("Timer expired");
-                    availMarches++;
+                    availMarches = Config.MARCH_AVAILABLE;
                 }
 
 

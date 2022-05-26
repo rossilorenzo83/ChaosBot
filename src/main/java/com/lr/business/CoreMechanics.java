@@ -12,6 +12,8 @@ import java.awt.*;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 import static com.lr.utils.ScreenUtils.findCoordsOnScreen;
 import static com.lr.utils.ScreenUtils.takeScreenCapture;
@@ -26,11 +28,13 @@ public class CoreMechanics {
     private Robot robot;
     public static int CONVERT_IMG_FLAG = IMREAD_COLOR;
 
-    public void setMainMapButtonsCoordsMap(Map<MainMapButtons, Double[]> mainMapButtonsCoordsMap) {
+    public void setMainMapButtonsCoordsMap(ConcurrentMap<String, Map<MainMapButtons, Double[]>> mainMapButtonsCoordsMap) {
         this.mainMapButtonsCoordsMap = mainMapButtonsCoordsMap;
     }
-
-    private Map<MainMapButtons, Double[]> mainMapButtonsCoordsMap;
+    public ConcurrentMap<String, Map<MainMapButtons, Double[]>> getMainMapButtonsCoordsMap() {
+        return this.mainMapButtonsCoordsMap;
+    }
+    private ConcurrentMap<String, Map<MainMapButtons, Double[]>> mainMapButtonsCoordsMap;
 
     @Autowired
     public CoreMechanics(Robot robot) {
@@ -42,12 +46,19 @@ public class CoreMechanics {
 
         //gotoMainMap with keystroke
 
-        moveAndClick(mainMapButtonsCoordsMap.get(MainMapButtons.SEARCH));
+        moveAndClick(mainMapButtonsCoordsMap.get(windowInfo).get(MainMapButtons.SEARCH));
 
         String searchViewPath = takeScreenCapture(windowInfo);
         Mat searchScreen = Imgcodecs.imread(searchViewPath, CONVERT_IMG_FLAG);
 
         try {
+
+            //Extra step to pick first loction
+            if(hasEncampment){
+                Double[] fortressSelectorCoords = findCoordsOnScreen(ExpeditionViewButtons.PRESET_RADIO.getImgPath(), searchScreen, windowInfo);
+                moveAndClick(fortressSelectorCoords);
+            }
+
 
             Double[] rssExpander = findCoordsOnScreen(SearchViewButtons.SEARCH_EXPANDER.getImgPath(), searchScreen, windowInfo);
 
@@ -70,8 +81,6 @@ public class CoreMechanics {
             moveAndClick(goCoords);
 
             // Now on map
-
-
 
 
             String mapPath = takeScreenCapture(windowInfo);
