@@ -3,7 +3,7 @@ Tool to automate repetitive tasks into Chaos Conquest game
 
 
 ## Howto run:
-`java -jar <folder containing the jar file>\java -jar .\chaos-conquest-bot-0.0.1-alpha.jar --general.marchesAvailable=1 general.windowsNames[0]=Toto`
+`java -jar <folder containing the jar file>\java -jar .\chaos-conquest-bot-0.0.1-alpha.jar --general.marchesAvailable=1 --general.windowsNames[0]=Toto`
 
 
 ## Overridable properties by command line, with current default values
