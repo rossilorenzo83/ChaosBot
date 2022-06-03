@@ -3,17 +3,18 @@ package com.lr;
 import com.lr.business.CoreMechanics;
 import com.lr.business.ImageNotMatchedException;
 import com.lr.business.MainMapButtons;
-import com.lr.business.RssType;
-import com.lr.config.Config;
+import com.lr.config.GeneralConfig;
+import com.lr.config.MarchConfig;
 import com.lr.utils.WinUtils;
 import lombok.extern.slf4j.Slf4j;
-import org.opencv.core.Core;
 import org.opencv.core.Mat;
 import org.opencv.imgcodecs.Imgcodecs;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.core.io.ResourceLoader;
 
 import java.awt.*;
 import java.io.IOException;
@@ -22,7 +23,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 
@@ -31,6 +31,7 @@ import static com.lr.utils.ScreenUtils.findCoordsOnScreen;
 import static com.lr.utils.ScreenUtils.takeScreenCapture;
 
 @SpringBootApplication
+@EnableConfigurationProperties({GeneralConfig.class, MarchConfig.class})
 @Slf4j
 public class ChaosBot implements CommandLineRunner {
 
@@ -42,6 +43,13 @@ public class ChaosBot implements CommandLineRunner {
     Robot robot;
     @Autowired
     Random random;
+    @Autowired
+    GeneralConfig generalConfig;
+    @Autowired
+    MarchConfig marchConfig;
+    @Autowired
+    ResourceLoader resourceLoader;
+
 
     public static void main(String[] args) {
         SpringApplication.run(ChaosBot.class, args);
@@ -50,10 +58,11 @@ public class ChaosBot implements CommandLineRunner {
     @Override
     public void run(String... args) {
 
-        System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
-        List<Integer> pidsBS = WinUtils.findPidsMatching(Config.PID_NAME);
+        //Load dll from jar dep
+        nu.pattern.OpenCV.loadShared();
+        List<Integer> pidsBS = WinUtils.findPidsMatching(generalConfig.getPidName());
         log.info("PIDs matching config found:", pidsBS.size());
-        List<WinUtils.WindowInfo> hwndList = WinUtils.findAllWindowsMatching(pidsBS, Config.WINDOWS_NAMES);
+        List<WinUtils.WindowInfo> hwndList = WinUtils.findAllWindowsMatching(pidsBS, generalConfig.getWindowsNames());
         log.info("Windows matching config found:", hwndList.size());
 
 
@@ -73,7 +82,7 @@ public class ChaosBot implements CommandLineRunner {
     }
 
     private void mainLogic(WinUtils.WindowInfo windowInfo) {
-        Integer availMarches = Config.MARCH_AVAILABLE;
+        Integer availMarches = marchConfig.getMarchesAvailable();
 
         try {
 
@@ -87,8 +96,10 @@ public class ChaosBot implements CommandLineRunner {
             for (MainMapButtons mainMapButton : MainMapButtons.values()) {
                 log.info("Searching coords for control:" + mainMapButton.name());
                 try {
+
                     Double[] absCoords = findCoordsOnScreen(mainMapButton.getImgPath(), fullScreen, windowInfo);
                     currentWindowCoords.put(mainMapButton, absCoords);
+
                 } catch (ImageNotMatchedException e) {
                     if (mainMapButton.equals(MainMapButtons.ENCAMPMENTS)) {
                         hasEncampments = false;
@@ -110,9 +121,9 @@ public class ChaosBot implements CommandLineRunner {
 
                 // Search coords
 
-                if (availMarches == 0 && (System.currentTimeMillis() - timeLastActionPerformed) > Config.TIME_INTERVAL_MILLIS) {
+                if (availMarches == 0 && (System.currentTimeMillis() - timeLastActionPerformed) > marchConfig.getMarchesInterval()) {
                     log.info("Timer expired");
-                    availMarches = Config.MARCH_AVAILABLE;
+                    availMarches =  marchConfig.getMarchesAvailable();
                 }
 
 
@@ -120,7 +131,9 @@ public class ChaosBot implements CommandLineRunner {
 
                     log.info("Exec started . . . ");
 
-                    coreMechanics.findAndFarm(10, RssType.values()[random.nextInt(RssType.values().length)], windowInfo, hasEncampments);
+                    coreMechanics.armyFarming(9, availMarches, windowInfo, hasEncampments);
+
+//                    coreMechanics.findAndFarm(10, RssType.values()[random.nextInt(RssType.values().length)], windowInfo, hasEncampments);
                     availMarches--;
                     timeLastActionPerformed = System.currentTimeMillis();
                 }

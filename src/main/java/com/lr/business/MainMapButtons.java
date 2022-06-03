@@ -1,7 +1,7 @@
 package com.lr.business;
 
 public enum MainMapButtons {
-    SEARCH("search.png"),
+    SEARCH("search.PNG"),
 //    QUESTS("challenges.png"),
     TRAININGS("trainings.PNG"),
     ALLIANCE ("alliance.PNG"),

@@ -1,20 +1,21 @@
 package com.lr.business;
 
-import java.util.Locale;
 import java.util.Optional;
 
-import static com.lr.config.Config.GAME_LANGUAGE;
 
 public enum SearchViewButtons {
 
     SEARCH_EXPANDER("search_type_expander.PNG", Optional.empty(), Optional.empty(), Optional.empty()),
-    SEARCH_MAP(Locale.FRENCH.equals(GAME_LANGUAGE)? "search_button_fr.PNG" :"", Optional.empty(), Optional.empty(), Optional.empty()),
-    GO_RSS(Locale.FRENCH.equals(GAME_LANGUAGE)? "go_rss_fr.PNG" :"go_rss_agnostic.PNG", Optional.empty(), Optional.empty(), Optional.empty()),
+    SEARCH_MAP_FR("search_button_fr.PNG", Optional.empty(), Optional.empty(), Optional.empty()),
+    GO_RSS_FR("go_rss_fr.PNG", Optional.empty(), Optional.empty(), Optional.empty()),
+    GO_RSS_EN("go_rss_agnostic.PNG", Optional.empty(), Optional.empty(), Optional.empty()),
     STONE_ICON("stone_icon.PNG", Optional.of(RssType.STONE), Optional.of("stone_source_map.PNG"), Optional.of("stone_collect_map.PNG")),
     LEAD_ICON("lead_icon.PNG", Optional.of(RssType.LEAD), Optional.of("lead_source_map.PNG"), Optional.of("lead_collect_map.PNG")),
     FOOD_ICON("farm_icon.PNG", Optional.of(RssType.FOOD), Optional.of("food_source_map.PNG"), Optional.of("food_collect_map.PNG")),
     IRON_ICON("iron_icon.PNG", Optional.of(RssType.IRON), Optional.of("iron_source_map.PNG"), Optional.of("iron_collect_map.PNG")),
-    WOOD_ICON("wood_icon.PNG", Optional.of(RssType.WOOD), Optional.of("wood_source_map.PNG"), Optional.of("wood_collect_map.PNG"));
+    WOOD_ICON("wood_icon.PNG", Optional.of(RssType.WOOD), Optional.of("wood_source_map.PNG"), Optional.of("wood_collect_map.PNG")),
+    ARMY_ICON("army_search_icon.PNG", Optional.empty(), Optional.empty(), Optional.empty()),
+    FOE_ICON("foe_icon.PNG", Optional.empty(), Optional.empty(), Optional.empty());
 
     public String getImgPath() {
         return imgPath;
