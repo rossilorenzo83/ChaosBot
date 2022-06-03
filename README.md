@@ -5,7 +5,24 @@ Tool to automate repetitive tasks into Chaos Conquest game
 ## Howto run:
 0-  tweak configuration file according to your needs 
 1- `mvn clean install spring-boot:repackage`
-2- `java -jar <folder containing the jar file>\java -jar .\chaos-conquest-bot-0.0.1-SNAPSHOT.jar`
+2- `java -jar <folder containing the jar file>\java -jar .\chaos-conquest-bot-0.0.1-alpha.jar --general.marchesAvailable=1 general.windowsNames[0]=Toto`
+
+
+## Overridable properties by command line, with current default values
+### Name of process (if switching to Steam)
+general.pidName = BlueStacks_nxt 
+### List of windows names if using multiple accounts
+general.windowsNames[0] = My Window
+### Time in ms between one action and next
+general.actionIntervalMs = 5000
+### Type of action, currently supporting ARMY_FARMING or RSS_FARMING
+general.actionType = ARMY_FARMING
+###Locale used for text on buttons (only fr supported so far)
+general.gameLanguage = fr
+###Marches available
+farm.marchesAvailable = 3
+###Interval between attempts (ms), to be used differently in case of farming armies or rss, in ms
+farm.marchesIntervalMs = 600000
 
 
 
