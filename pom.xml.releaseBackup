@@ -1,9 +1,9 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project>
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.lr</groupId>
     <artifactId>chaos-conquest-bot</artifactId>
-    <version>0.0.1-alpha</version>
+    <version>0.0.1-SNAPSHOT</version>
 
 
     <parent>
@@ -43,8 +43,7 @@
 
     <scm>
         <developerConnection>scm:git:https://github.com/rossilorenzo83/ChaosBot.git</developerConnection>
-        <tag>chaos-conquest-bot-0.0.1-alpha</tag>
-  </scm>
+    </scm>
 
     <dependencies>
         <dependency>
