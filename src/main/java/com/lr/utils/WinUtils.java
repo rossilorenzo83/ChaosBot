@@ -16,58 +16,6 @@ import static com.sun.jna.platform.win32.WinNT.*;
 
 public class WinUtils {
 
-    public interface User32 extends StdCallLibrary {
-        User32 INSTANCE = (User32) Native.load("user32", User32.class, W32APIOptions.DEFAULT_OPTIONS);
-
-        boolean EnumWindows(WinUser.WNDENUMPROC lpEnumFunc, Pointer arg);
-
-        int GetWindowText(WinDef.HWND hWnd, char[] lpString, int nMaxCount);
-
-        int GetWindowRect(WinDef.HWND hWnd, RECT r);
-
-        int GetWindowThreadProcessId(WinDef.HWND hWnd, IntByReference pref);
-
-    }
-
-    public interface Psapi extends StdCallLibrary {
-        Psapi INSTANCE = (Psapi) Native.load("Psapi", Psapi.class);
-
-        boolean EnumProcesses(int[] ProcessIDsOut, int size, int[] BytesReturned);
-
-        boolean EnumProcessModules(WinNT.HANDLE hProcess, WinDef.HMODULE[] lphModule, int cb, IntByReference lpcbNeeded);
-
-        WinDef.DWORD GetModuleBaseNameW(Pointer hProcess, Pointer hModule, byte[] lpBaseName, int nSize);
-
-        boolean GetModuleInformation(WinNT.HANDLE hProcess, WinDef.HMODULE hModule, com.sun.jna.platform.win32.Psapi.MODULEINFO lpmodinfo, int cb);
-
-        int GetModuleFileNameExA(WinNT.HANDLE process, WinNT.HANDLE module, byte[] lpFilename, int nSize);
-    }
-
-    public interface Kernel32 extends StdCallLibrary {
-        Kernel32 INSTANCE = (Kernel32) Native.load("Kernel32", Kernel32.class);
-
-        WinNT.HANDLE OpenProcess(int fdwAccess, boolean fInherit, int IDProcess);
-
-        WinNT.HANDLE GetCurrentProcess ();
-
-        void CloseHandle(WinNT.HANDLE handle);
-    }
-
-
-    public static class RECT extends Structure {
-        public int left, top, right, bottom;
-
-        @Override
-        protected List<String> getFieldOrder() {
-            List<String> order = new ArrayList<>();
-            order.add("left");
-            order.add("top");
-            order.add("right");
-            order.add("bottom");
-            return order;
-        }
-    }
-
     public static List<Integer> findPidsMatching(String name) {
         int[] processlist = new int[5012];
         int[] dummylist = new int[5012];
@@ -77,8 +25,8 @@ public class WinUtils {
         boolean enableDebugPrivilege = WinUtils.enableDebugPrivilege();
 
         //FIXME improve to better filter out
-        for (int i=0 ; i<processlist.length; i++) {
-            WinNT.HANDLE ph = com.sun.jna.platform.win32.Kernel32.INSTANCE.OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ , false, processlist[i]);
+        for (int i = 0; i < processlist.length; i++) {
+            WinNT.HANDLE ph = com.sun.jna.platform.win32.Kernel32.INSTANCE.OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, processlist[i]);
             if (ph != null) {
 
                 byte[] buffer = new byte[1024];
@@ -151,6 +99,66 @@ public class WinUtils {
         return windows;
     }
 
+    public static WindowInfo getWindowInfo(WinDef.HWND hWnd) {
+        RECT r = new RECT();
+        User32.INSTANCE.GetWindowRect(hWnd, r);
+        char[] buffer = new char[1024];
+        User32.INSTANCE.GetWindowText(hWnd, buffer, buffer.length);
+        String title = Native.toString(buffer);
+        WindowInfo info = new WindowInfo(r, title);
+        return info;
+    }
+
+    public interface User32 extends StdCallLibrary {
+        User32 INSTANCE = (User32) Native.load("user32", User32.class, W32APIOptions.DEFAULT_OPTIONS);
+
+        boolean EnumWindows(WinUser.WNDENUMPROC lpEnumFunc, Pointer arg);
+
+        int GetWindowText(WinDef.HWND hWnd, char[] lpString, int nMaxCount);
+
+        int GetWindowRect(WinDef.HWND hWnd, RECT r);
+
+        int GetWindowThreadProcessId(WinDef.HWND hWnd, IntByReference pref);
+
+    }
+
+    public interface Psapi extends StdCallLibrary {
+        Psapi INSTANCE = (Psapi) Native.load("Psapi", Psapi.class);
+
+        boolean EnumProcesses(int[] ProcessIDsOut, int size, int[] BytesReturned);
+
+        boolean EnumProcessModules(WinNT.HANDLE hProcess, WinDef.HMODULE[] lphModule, int cb, IntByReference lpcbNeeded);
+
+        WinDef.DWORD GetModuleBaseNameW(Pointer hProcess, Pointer hModule, byte[] lpBaseName, int nSize);
+
+        boolean GetModuleInformation(WinNT.HANDLE hProcess, WinDef.HMODULE hModule, com.sun.jna.platform.win32.Psapi.MODULEINFO lpmodinfo, int cb);
+
+        int GetModuleFileNameExA(WinNT.HANDLE process, WinNT.HANDLE module, byte[] lpFilename, int nSize);
+    }
+
+    public interface Kernel32 extends StdCallLibrary {
+        Kernel32 INSTANCE = (Kernel32) Native.load("Kernel32", Kernel32.class);
+
+        WinNT.HANDLE OpenProcess(int fdwAccess, boolean fInherit, int IDProcess);
+
+        WinNT.HANDLE GetCurrentProcess();
+
+        void CloseHandle(WinNT.HANDLE handle);
+    }
+
+    public static class RECT extends Structure {
+        public int left, top, right, bottom;
+
+        @Override
+        protected List<String> getFieldOrder() {
+            List<String> order = new ArrayList<>();
+            order.add("left");
+            order.add("top");
+            order.add("right");
+            order.add("bottom");
+            return order;
+        }
+    }
 
     public static class WindowInfo {
         RECT rect;
@@ -161,6 +169,10 @@ public class WinUtils {
             this.title = title;
         }
 
+        public String getTitle() {
+            return title;
+        }
+
         public RECT getRect() {
             return rect;
         }
@@ -168,15 +180,5 @@ public class WinUtils {
         public String toString() {
             return String.format("(%d,%d)-(%d,%d) : \"%s\"", rect.left, rect.top, rect.right, rect.bottom, title);
         }
-    }
-
-    public static WindowInfo getWindowInfo(WinDef.HWND hWnd) {
-        RECT r = new RECT();
-        User32.INSTANCE.GetWindowRect(hWnd, r);
-        char[] buffer = new char[1024];
-        User32.INSTANCE.GetWindowText(hWnd, buffer, buffer.length);
-        String title = Native.toString(buffer);
-        WindowInfo info = new WindowInfo(r, title);
-        return info;
     }
 }

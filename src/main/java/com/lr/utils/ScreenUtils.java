@@ -74,7 +74,6 @@ public class ScreenUtils {
                 rectangle(fullScreenImg, matchLoc, new Point(matchLoc.x + toMatch.cols(),
                         matchLoc.y + toMatch.rows()), new Scalar(255, 255, 255));
 
-
                 Double offsetX = matchLoc.x;
                 Double offsetY = matchLoc.y;
                 Double absXCoord = windowInfo.getRect().left + offsetX + toMatch.size().width / 2;

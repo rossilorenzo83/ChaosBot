@@ -14,7 +14,6 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.core.io.ResourceLoader;
 
 import java.awt.*;
 import java.io.IOException;
@@ -23,6 +22,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 
@@ -47,8 +47,6 @@ public class ChaosBot implements CommandLineRunner {
     GeneralConfig generalConfig;
     @Autowired
     MarchConfig marchConfig;
-    @Autowired
-    ResourceLoader resourceLoader;
 
 
     public static void main(String[] args) {
@@ -59,7 +57,7 @@ public class ChaosBot implements CommandLineRunner {
     public void run(String... args) {
 
         //Load dll from jar dep
-        nu.pattern.OpenCV.loadShared();
+        nu.pattern.OpenCV.loadLocally();
         List<Integer> pidsBS = WinUtils.findPidsMatching(generalConfig.getPidName());
         log.info("PIDs matching config found:", pidsBS.size());
         List<WinUtils.WindowInfo> hwndList = WinUtils.findAllWindowsMatching(pidsBS, generalConfig.getWindowsNames());
@@ -112,7 +110,9 @@ public class ChaosBot implements CommandLineRunner {
             }
 
             ConcurrentMap<String, Map<MainMapButtons, Double[]>> existingCoordsMap = this.coreMechanics.getMainMapButtonsCoordsMap();
-            existingCoordsMap.put(windowInfo.toString(), currentWindowCoords);
+            if (existingCoordsMap == null)
+                existingCoordsMap = new ConcurrentHashMap<>();
+            existingCoordsMap.put(windowInfo.getTitle(), currentWindowCoords);
             coreMechanics.setMainMapButtonsCoordsMap(existingCoordsMap);
 
             Long timeLastActionPerformed = System.currentTimeMillis();
@@ -123,7 +123,7 @@ public class ChaosBot implements CommandLineRunner {
 
                 if (availMarches == 0 && (System.currentTimeMillis() - timeLastActionPerformed) > marchConfig.getMarchesInterval()) {
                     log.info("Timer expired");
-                    availMarches =  marchConfig.getMarchesAvailable();
+                    availMarches = marchConfig.getMarchesAvailable();
                 }
 
 

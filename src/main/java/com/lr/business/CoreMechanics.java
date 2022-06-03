@@ -55,7 +55,7 @@ public class CoreMechanics {
 
         //gotoMainMap with keystroke
 
-        moveAndClick(mainMapButtonsCoordsMap.get(windowInfo).get(MainMapButtons.SEARCH));
+        moveAndClick(mainMapButtonsCoordsMap.get(windowInfo.getTitle()).get(MainMapButtons.SEARCH));
 
         String searchViewPath = takeScreenCapture(windowInfo);
         Mat searchScreen = Imgcodecs.imread(searchViewPath, CONVERT_IMG_FLAG);
