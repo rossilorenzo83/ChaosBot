@@ -3,6 +3,7 @@ package com.lr;
 import com.lr.business.CoreMechanics;
 import com.lr.business.ImageNotMatchedException;
 import com.lr.business.MainMapButtons;
+import com.lr.business.RssType;
 import com.lr.config.GeneralConfig;
 import com.lr.config.MarchConfig;
 import com.lr.utils.WinUtils;
@@ -121,7 +122,7 @@ public class ChaosBot implements CommandLineRunner {
 
                 // Search coords
 
-                if (availMarches == 0 && (System.currentTimeMillis() - timeLastActionPerformed) > marchConfig.getMarchesInterval()) {
+                if (availMarches == 0 && (System.currentTimeMillis() - timeLastActionPerformed) > marchConfig.getMarchesIntervalMs()) {
                     log.info("Timer expired");
                     availMarches = marchConfig.getMarchesAvailable();
                 }
@@ -131,9 +132,17 @@ public class ChaosBot implements CommandLineRunner {
 
                     log.info("Exec started . . . ");
 
-                    coreMechanics.armyFarming(9, availMarches, windowInfo, hasEncampments);
+                    switch (generalConfig.getActionType()) {
 
-//                    coreMechanics.findAndFarm(10, RssType.values()[random.nextInt(RssType.values().length)], windowInfo, hasEncampments);
+                        case ARMY_FARMING:
+                            coreMechanics.armyFarming(9, availMarches, windowInfo, hasEncampments);
+                            break;
+
+                        case RSS_FARMING:
+                        default: coreMechanics.findAndFarm(10, RssType.values()[random.nextInt(RssType.values().length)], windowInfo, hasEncampments);
+                                 break;
+                    }
+
                     availMarches--;
                     timeLastActionPerformed = System.currentTimeMillis();
                 }

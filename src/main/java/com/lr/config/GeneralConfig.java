@@ -1,5 +1,6 @@
 package com.lr.config;
 
+import com.lr.business.ActionType;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -25,6 +26,8 @@ public class GeneralConfig {
     private List<String> windowsNames;
 
     private Locale gameLanguage;
+    private Long actionIntervalMs;
+    private ActionType actionType;
 
     public static Double SUPPORTED_IMG_WIDTH = 483D;
     public static Double SUPPORTED_IMG_HEIGHT = 835D;
