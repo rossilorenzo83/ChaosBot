@@ -19,6 +19,7 @@ import java.util.concurrent.ConcurrentMap;
 import static com.lr.utils.ScreenUtils.findCoordsOnScreen;
 import static com.lr.utils.ScreenUtils.takeScreenCapture;
 import static java.awt.event.InputEvent.BUTTON1_DOWN_MASK;
+import static java.awt.event.KeyEvent.VK_ESCAPE;
 import static org.opencv.imgcodecs.Imgcodecs.IMREAD_COLOR;
 
 @Component
@@ -61,24 +62,24 @@ public class CoreMechanics {
         try {
 
 
-            Double[] rssExpander = findCoordsOnScreen(SearchViewButtons.SEARCH_EXPANDER.getImgPath(), searchScreen, windowInfo);
+            Double[] rssExpander = findCoordsOnScreen(SearchViewButtons.SEARCH_EXPANDER.getImgPath(), searchScreen, windowInfo, false);
 
             moveAndClick(rssExpander);
 
             searchViewPath = takeScreenCapture(windowInfo);
             searchScreen = Imgcodecs.imread(searchViewPath, CONVERT_IMG_FLAG);
 
-            Double[] rssTypeChoice = findCoordsOnScreen(SearchViewButtons.getEnumFromRssType(rssType).getImgPath(), searchScreen, windowInfo);
+            Double[] rssTypeChoice = findCoordsOnScreen(SearchViewButtons.getEnumFromRssType(rssType).getImgPath(), searchScreen, windowInfo, false);
             log.info("Coords for rss expander for rss {} found at: {}", rssType, rssTypeChoice);
             moveAndClick(rssTypeChoice);
 
-            Double[] searchOnMapCoords = findCoordsOnScreen(SearchViewButtons.SEARCH_MAP_FR.getImgPath(), searchScreen, windowInfo);
+            Double[] searchOnMapCoords = findCoordsOnScreen(Locale.FRENCH.equals(generalConfig.getGameLanguage()) ? SearchViewButtons.SEARCH_MAP_FR.getImgPath() : SearchViewButtons.SEARCH_MAP_EN.getImgPath(), searchScreen, windowInfo, false);
             moveAndClick(searchOnMapCoords);
 
             String searchResultsPath = takeScreenCapture(windowInfo);
             Mat searchResultsScreen = Imgcodecs.imread(searchResultsPath, CONVERT_IMG_FLAG);
 
-            Double[] goCoords = findCoordsOnScreen(Locale.FRENCH.equals(generalConfig.getGameLanguage()) ? SearchViewButtons.GO_RSS_FR.getImgPath() : SearchViewButtons.GO_RSS_EN.getImgPath(), searchResultsScreen, windowInfo);
+            Double[] goCoords = findCoordsOnScreen(Locale.FRENCH.equals(generalConfig.getGameLanguage()) ? SearchViewButtons.GO_RSS_FR.getImgPath() : SearchViewButtons.GO_RSS_EN.getImgPath(), searchResultsScreen, windowInfo, false);
             moveAndClick(goCoords);
 
             // Now on map
@@ -88,36 +89,38 @@ public class CoreMechanics {
             String mapPath = takeScreenCapture(windowInfo);
             Mat mapScreen = Imgcodecs.imread(mapPath, CONVERT_IMG_FLAG);
 
-            Double[] rssCollectSource = findCoordsOnScreen(SearchViewButtons.getEnumFromRssType(rssType).getOnMapCollectButtonPath(), mapScreen, windowInfo);
+            Double[] rssCollectSource = findCoordsOnScreen(SearchViewButtons.getEnumFromRssType(rssType).getOnMapCollectButtonPath(), mapScreen, windowInfo, true);
             moveAndClick(rssCollectSource);
 
 
             // Now on army selector view
             if (hasEncampment) {
-                String locationSelectionPath = takeScreenCapture(windowInfo);
-                Mat locationSelectionScreen = Imgcodecs.imread(locationSelectionPath, CONVERT_IMG_FLAG);
-                Double[] nextBtnCoords = findCoordsOnScreen(ExpeditionViewButtons.NEXT_BUTTON.getImgPath(), locationSelectionScreen, windowInfo);
-                moveAndClick(nextBtnCoords);
+                handleStartLocationScreen(windowInfo);
             }
 
             String armySelectionPath = takeScreenCapture(windowInfo);
             Mat armySelectionScreen = Imgcodecs.imread(armySelectionPath, CONVERT_IMG_FLAG);
 
-            Double[] armyPresetCoords = findCoordsOnScreen(ExpeditionViewButtons.PRESET_ICON.getImgPath(), armySelectionScreen, windowInfo);
+            Double[] armyPresetCoords = findCoordsOnScreen(ExpeditionViewButtons.PRESET_ICON.getImgPath(), armySelectionScreen, windowInfo, false);
             moveAndClick(armyPresetCoords);
 
             String armyPresetsPath = takeScreenCapture(windowInfo);
             Mat armyPresetsScreen = Imgcodecs.imread(armyPresetsPath, CONVERT_IMG_FLAG);
-            Double[] armyPresetGatheringCoords = findCoordsOnScreen(ExpeditionViewButtons.PRESET_RADIO.getImgPath(), armyPresetsScreen, windowInfo);
+            Double[] armyPresetGatheringCoords = findCoordsOnScreen(ExpeditionViewButtons.PRESET_RADIO.getImgPath(), armyPresetsScreen, windowInfo, false);
             moveAndClick(armyPresetGatheringCoords);
 
             armySelectionPath = takeScreenCapture(windowInfo);
             armySelectionScreen = Imgcodecs.imread(armySelectionPath, CONVERT_IMG_FLAG);
 
-            Double[] launchCoords = findCoordsOnScreen(ExpeditionViewButtons.LAUNCH_EXPEDITION_BUTTON.getImgPath(), armySelectionScreen, windowInfo);
+            Double[] launchCoords = findCoordsOnScreen(Locale.ENGLISH.equals(generalConfig.getGameLanguage()) ? ExpeditionViewButtons.LAUNCH_EXPEDITION_BUTTON_EN.getImgPath() : ExpeditionViewButtons.LAUNCH_EXPEDITION_BUTTON_FR.getImgPath(), armySelectionScreen, windowInfo, false);
             moveAndClick(launchCoords);
         } catch (ImageNotMatchedException e) {
             log.error(e.getMessage());
+            //Go back to main screen
+            if (!e.getInMainMap()) {
+                goBackToMainMap();
+            }
+
 
         }
         //Back to main screen
@@ -136,15 +139,15 @@ public class CoreMechanics {
 
         try {
 
-            Double[] rssExpander = findCoordsOnScreen(SearchViewButtons.SEARCH_EXPANDER.getImgPath(), searchScreen, windowInfo);
-            Double[] mapSearchButton = findCoordsOnScreen(SearchViewButtons.SEARCH_MAP_FR.getImgPath(), searchScreen, windowInfo);
+            Double[] rssExpander = findCoordsOnScreen(SearchViewButtons.SEARCH_EXPANDER.getImgPath(), searchScreen, windowInfo, false);
+            Double[] mapSearchButton = findCoordsOnScreen(Locale.ENGLISH.equals(generalConfig.getGameLanguage()) ? SearchViewButtons.SEARCH_MAP_EN.getImgPath() : SearchViewButtons.SEARCH_MAP_FR.getImgPath(), searchScreen, windowInfo, false);
 
             moveAndClick(rssExpander);
 
             searchViewPath = takeScreenCapture(windowInfo);
             searchScreen = Imgcodecs.imread(searchViewPath, CONVERT_IMG_FLAG);
 
-            Double[] armyChoice = findCoordsOnScreen(SearchViewButtons.ARMY_ICON.getImgPath(), searchScreen, windowInfo);
+            Double[] armyChoice = findCoordsOnScreen(SearchViewButtons.ARMY_ICON.getImgPath(), searchScreen, windowInfo, false);
             moveAndClick(armyChoice);
 
             moveAndClick(mapSearchButton);
@@ -152,11 +155,8 @@ public class CoreMechanics {
             searchViewPath = takeScreenCapture(windowInfo);
             searchScreen = Imgcodecs.imread(searchViewPath, CONVERT_IMG_FLAG);
 
-            Double[] goToArmy = findCoordsOnScreen(SearchViewButtons.GO_RSS_FR.getImgPath(), searchScreen, windowInfo);
+            Double[] goToArmy = findCoordsOnScreen(Locale.ENGLISH.equals(generalConfig.getGameLanguage()) ? SearchViewButtons.GO_RSS_EN.getImgPath() : SearchViewButtons.GO_RSS_FR.getImgPath(), searchScreen, windowInfo, false);
             moveAndClick(goToArmy);
-
-            searchViewPath = takeScreenCapture(windowInfo);
-            searchScreen = Imgcodecs.imread(searchViewPath, CONVERT_IMG_FLAG);
 
             Double[] armyOnMap = findWindowCenterCoords(windowInfo);
             moveAndClick(armyOnMap);
@@ -164,27 +164,22 @@ public class CoreMechanics {
             searchViewPath = takeScreenCapture(windowInfo);
             searchScreen = Imgcodecs.imread(searchViewPath, CONVERT_IMG_FLAG);
 
-            Double[] attackBtn = findCoordsOnScreen(ExpeditionViewButtons.LAUNCH_ATTACK_BUTTON.getImgPath(), searchScreen, windowInfo);
+            Double[] attackBtn = findCoordsOnScreen(Locale.ENGLISH.equals(generalConfig.getGameLanguage()) ? ExpeditionViewButtons.LAUNCH_ATTACK_BUTTON_EN.getImgPath() : ExpeditionViewButtons.LAUNCH_ATTACK_BUTTON_FR.getImgPath(), searchScreen, windowInfo, true);
             moveAndClick(attackBtn);
 
             if (hasEncampment) {
-                String locationSelectionPath = takeScreenCapture(windowInfo);
-                Mat locationSelectionScreen = Imgcodecs.imread(locationSelectionPath, CONVERT_IMG_FLAG);
-                Double[] fortressIcon = findCoordsOnScreen(ExpeditionViewButtons.FORTRESS_SELECTION_ICON.getImgPath(), locationSelectionScreen, windowInfo);
-                moveAndClick(fortressIcon);
-                Double[] nextBtnCoords = findCoordsOnScreen(ExpeditionViewButtons.NEXT_BUTTON.getImgPath(), locationSelectionScreen, windowInfo);
-                moveAndClick(nextBtnCoords);
+                handleStartLocationScreen(windowInfo);
             }
 
             String armySelectionViewPath = takeScreenCapture(windowInfo);
             searchScreen = Imgcodecs.imread(armySelectionViewPath, CONVERT_IMG_FLAG);
             log.info("Clicking army preset #{}", armyPreset);
-            Double[] armyPresetBtn = findCoordsOnScreen(ExpeditionViewButtons.getPresetById(armyPreset).getImgPath(), searchScreen, windowInfo);
+            Double[] armyPresetBtn = findCoordsOnScreen(ExpeditionViewButtons.getPresetById(armyPreset).getImgPath(), searchScreen, windowInfo, false);
             moveAndClick(armyPresetBtn);
 
             armySelectionViewPath = takeScreenCapture(windowInfo);
             searchScreen = Imgcodecs.imread(armySelectionViewPath, CONVERT_IMG_FLAG);
-            Double[] launchPartyButton = findCoordsOnScreen(ExpeditionViewButtons.LAUNCH_EXPEDITION_BUTTON.getImgPath(), searchScreen, windowInfo);
+            Double[] launchPartyButton = findCoordsOnScreen(Locale.ENGLISH.equals(generalConfig.getGameLanguage()) ? ExpeditionViewButtons.LAUNCH_EXPEDITION_BUTTON_EN.getImgPath() : ExpeditionViewButtons.LAUNCH_EXPEDITION_BUTTON_FR.getImgPath(), searchScreen, windowInfo, false);
 
             moveAndClick(launchPartyButton);
 
@@ -200,6 +195,15 @@ public class CoreMechanics {
 
     }
 
+    private void handleStartLocationScreen(WinUtils.WindowInfo windowInfo) throws AWTException, IOException, URISyntaxException, ImageNotMatchedException, InterruptedException {
+        String locationSelectionPath = takeScreenCapture(windowInfo);
+        Mat locationSelectionScreen = Imgcodecs.imread(locationSelectionPath, CONVERT_IMG_FLAG);
+        Double[] fortressIcon = findCoordsOnScreen(ExpeditionViewButtons.FORTRESS_SELECTION_ICON.getImgPath(), locationSelectionScreen, windowInfo, false);
+        moveAndClick(fortressIcon);
+        Double[] nextBtnCoords = findCoordsOnScreen(Locale.ENGLISH.equals(generalConfig.getGameLanguage()) ? ExpeditionViewButtons.NEXT_BUTTON_EN.getImgPath() : ExpeditionViewButtons.NEXT_BUTTON_FR.getImgPath(), locationSelectionScreen, windowInfo, false);
+        moveAndClick(nextBtnCoords);
+    }
+
     private Double[] findWindowCenterCoords(WinUtils.WindowInfo windowInfo) {
         Rectangle screenRect = new Rectangle(windowInfo.getRect().left, windowInfo.getRect().top, Math.abs(windowInfo.getRect().right
                 - windowInfo.getRect().left), Math.abs(windowInfo.getRect().bottom - windowInfo.getRect().top));
@@ -212,6 +216,16 @@ public class CoreMechanics {
         robot.mouseRelease(BUTTON1_DOWN_MASK);
         Thread.sleep(generalConfig.getActionIntervalMs());
 
+    }
+
+    private void goBackToMainMap() throws InterruptedException {
+        robot.keyPress(VK_ESCAPE);
+        robot.keyRelease(VK_ESCAPE);
+        Thread.sleep(generalConfig.getActionIntervalMs());
+
+        robot.keyPress(VK_ESCAPE);
+        robot.keyRelease(VK_ESCAPE);
+        Thread.sleep(generalConfig.getActionIntervalMs());
     }
 
 

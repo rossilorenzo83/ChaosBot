@@ -11,8 +11,10 @@ import org.springframework.context.annotation.Configuration;
 @Getter
 public class MarchConfig {
 
-    private Long marchesIntervalMs;
+    private Long marchesIntervalMins;
 
     private Integer marchesAvailable;
+
+    private Integer targetLevel;
 
 }

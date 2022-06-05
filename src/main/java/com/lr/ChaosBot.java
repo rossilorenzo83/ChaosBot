@@ -96,7 +96,7 @@ public class ChaosBot implements CommandLineRunner {
                 log.info("Searching coords for control:" + mainMapButton.name());
                 try {
 
-                    Double[] absCoords = findCoordsOnScreen(mainMapButton.getImgPath(), fullScreen, windowInfo);
+                    Double[] absCoords = findCoordsOnScreen(mainMapButton.getImgPath(), fullScreen, windowInfo, true);
                     currentWindowCoords.put(mainMapButton, absCoords);
 
                 } catch (ImageNotMatchedException e) {
@@ -122,7 +122,7 @@ public class ChaosBot implements CommandLineRunner {
 
                 // Search coords
 
-                if (availMarches == 0 && (System.currentTimeMillis() - timeLastActionPerformed) > marchConfig.getMarchesIntervalMs()) {
+                if (availMarches == 0 && (System.currentTimeMillis() - timeLastActionPerformed) > marchConfig.getMarchesIntervalMins() * 60 *1000) {
                     log.info("Timer expired");
                     availMarches = marchConfig.getMarchesAvailable();
                 }
@@ -135,11 +135,11 @@ public class ChaosBot implements CommandLineRunner {
                     switch (generalConfig.getActionType()) {
 
                         case ARMY_FARMING:
-                            coreMechanics.armyFarming(9, availMarches, windowInfo, hasEncampments);
+                            coreMechanics.armyFarming(marchConfig.getTargetLevel(), availMarches, windowInfo, hasEncampments);
                             break;
 
                         case RSS_FARMING:
-                        default: coreMechanics.findAndFarm(10, RssType.values()[random.nextInt(RssType.values().length)], windowInfo, hasEncampments);
+                        default: coreMechanics.findAndFarm(marchConfig.getTargetLevel(), RssType.values()[random.nextInt(RssType.values().length)], windowInfo, hasEncampments);
                                  break;
                     }
 

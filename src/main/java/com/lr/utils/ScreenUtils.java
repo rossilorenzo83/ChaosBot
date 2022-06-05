@@ -18,7 +18,6 @@ import java.net.URISyntaxException;
 import java.nio.file.StandardCopyOption;
 
 import static com.lr.business.CoreMechanics.CONVERT_IMG_FLAG;
-import static org.opencv.imgcodecs.Imgcodecs.imwrite;
 import static org.opencv.imgproc.Imgproc.*;
 
 @Slf4j
@@ -26,7 +25,7 @@ public class ScreenUtils {
 
 
     //Somehow this have to be kept low. Investigate / find a decent tutorial on appropriate flags
-    public static final double MIN_QUALITY_THRESHOLD = 0.45;
+    public static final double MIN_QUALITY_THRESHOLD = 0.75;
 
     public static String takeScreenCapture(WinUtils.WindowInfo windowInfo) throws AWTException, IOException {
         Rectangle screenRect = new Rectangle(windowInfo.rect.left, windowInfo.rect.top, Math.abs(windowInfo.rect.right
@@ -38,13 +37,13 @@ public class ScreenUtils {
         return filePath;
     }
 
-    public static Double[] findCoordsOnScreen(String pathImgToFind, Mat fullScreenImg, WinUtils.WindowInfo windowInfo) throws URISyntaxException, ImageNotMatchedException, IOException {
+    public static Double[] findCoordsOnScreen(String pathImgToFind, Mat fullScreenImg, WinUtils.WindowInfo windowInfo, Boolean inMainMap) throws URISyntaxException, ImageNotMatchedException, IOException {
 
         try {
 
 
             InputStream inputStream = new ClassPathResource(pathImgToFind).getInputStream();
-            File f = new File("targetFile.PNG");
+            File f = new File("targetFile-"+windowInfo.getTitle()+".PNG");
             java.nio.file.Files.copy(
                     inputStream,
                     f.toPath(),
@@ -80,16 +79,13 @@ public class ScreenUtils {
                 Double absYCoord = windowInfo.getRect().top + offsetY + toMatch.size().height / 2;
                 return new Double[]{absXCoord, absYCoord};
             } else{
-
-                imwrite("template_not_matched_resized.png", resizedToMatch);
-                imwrite("template_not_matched_original.png", toMatch);
                 log.error("Insufficient confidence {} matching the provided template", mmr.maxVal);
-                throw new ImageNotMatchedException("Cannot find img: " + pathImgToFind);
+                throw new ImageNotMatchedException("Cannot find img: " + pathImgToFind, inMainMap);
             }
 
         }
         catch(CvException e){
-            throw new ImageNotMatchedException(e.getMessage());
+            throw new ImageNotMatchedException(e.getMessage(), inMainMap);
         }
 
     }

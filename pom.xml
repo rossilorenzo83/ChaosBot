@@ -3,7 +3,7 @@
 
     <groupId>com.lr</groupId>
     <artifactId>chaos-conquest-bot</artifactId>
-    <version>0.0.1-alpha</version>
+    <version>0.0.1-beta-SNAPSHOT</version>
 
 
     <parent>
@@ -43,7 +43,7 @@
 
     <scm>
         <developerConnection>scm:git:https://github.com/rossilorenzo83/ChaosBot.git</developerConnection>
-        <tag>chaos-conquest-bot-0.0.1-alpha</tag>
+        <tag>HEAD</tag>
   </scm>
 
     <dependencies>

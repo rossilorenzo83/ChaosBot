@@ -7,8 +7,10 @@ public enum SearchViewButtons {
 
     SEARCH_EXPANDER("search_type_expander.PNG", Optional.empty(), Optional.empty(), Optional.empty()),
     SEARCH_MAP_FR("search_button_fr.PNG", Optional.empty(), Optional.empty(), Optional.empty()),
+    SEARCH_MAP_EN("search_button_en.PNG", Optional.empty(), Optional.empty(), Optional.empty()),
+
     GO_RSS_FR("go_rss_fr.PNG", Optional.empty(), Optional.empty(), Optional.empty()),
-    GO_RSS_EN("go_rss_agnostic.PNG", Optional.empty(), Optional.empty(), Optional.empty()),
+    GO_RSS_EN("go_rss_en.PNG", Optional.empty(), Optional.empty(), Optional.empty()),
     STONE_ICON("stone_icon.PNG", Optional.of(RssType.STONE), Optional.of("stone_source_map.PNG"), Optional.of("stone_collect_map.PNG")),
     LEAD_ICON("lead_icon.PNG", Optional.of(RssType.LEAD), Optional.of("lead_source_map.PNG"), Optional.of("lead_collect_map.PNG")),
     FOOD_ICON("farm_icon.PNG", Optional.of(RssType.FOOD), Optional.of("food_source_map.PNG"), Optional.of("food_collect_map.PNG")),
