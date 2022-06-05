@@ -122,7 +122,7 @@ public class ChaosBot implements CommandLineRunner {
 
                 // Search coords
 
-                if (availMarches == 0 && (System.currentTimeMillis() - timeLastActionPerformed) > marchConfig.getMarchesIntervalMins() * 60 *1000) {
+                if (availMarches == 0 && (System.currentTimeMillis() - timeLastActionPerformed) > (marchConfig.getMarchesIntervalMins() * 60 *1000)) {
                     log.info("Timer expired");
                     availMarches = marchConfig.getMarchesAvailable();
                 }

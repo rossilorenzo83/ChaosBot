@@ -186,6 +186,10 @@ public class CoreMechanics {
 
         } catch (ImageNotMatchedException e) {
             log.error(e.getMessage());
+            //Go back to main screen
+            if (!e.getInMainMap()) {
+                goBackToMainMap();
+            }
 
         }
         //Back to main screen
