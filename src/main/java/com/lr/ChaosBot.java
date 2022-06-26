@@ -135,11 +135,11 @@ public class ChaosBot implements CommandLineRunner {
                     switch (generalConfig.getActionType()) {
 
                         case ARMY_FARMING:
-                            coreMechanics.armyFarming(marchConfig.getTargetLevel(), availMarches, windowInfo, hasEncampments);
+                            coreMechanics.armyFarming(marchConfig.getTargetArmyLevel(), availMarches, windowInfo, hasEncampments);
                             break;
 
                         case RSS_FARMING:
-                        default: coreMechanics.findAndFarm(marchConfig.getTargetLevel(), RssType.values()[random.nextInt(RssType.values().length)], windowInfo, hasEncampments);
+                        default: coreMechanics.findAndFarm(marchConfig.getTargetRssLevel(), RssType.values()[random.nextInt(RssType.values().length)], windowInfo, hasEncampments);
                                  break;
                     }
 

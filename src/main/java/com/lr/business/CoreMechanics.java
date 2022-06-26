@@ -50,7 +50,7 @@ public class CoreMechanics {
     }
 
 
-    public void findAndFarm(int rssLevel, RssType rssType, WinUtils.WindowInfo windowInfo, boolean hasEncampment) throws InterruptedException, AWTException, IOException, URISyntaxException {
+    public void findAndFarm(String rssLevel, RssType rssType, WinUtils.WindowInfo windowInfo, boolean hasEncampment) throws InterruptedException, AWTException, IOException, URISyntaxException {
 
         //gotoMainMap with keystroke
 
@@ -63,6 +63,8 @@ public class CoreMechanics {
 
 
             Double[] rssExpander = findCoordsOnScreen(SearchViewButtons.SEARCH_EXPANDER.getImgPath(), searchScreen, windowInfo, false);
+            Double[] lvlChoiceExpander = findCoordsOnScreen(SearchViewButtons.SEARCH_LEVEL_EXPANDER.getImgPath(), searchScreen, windowInfo, false);
+
 
             moveAndClick(rssExpander);
 
@@ -72,6 +74,15 @@ public class CoreMechanics {
             Double[] rssTypeChoice = findCoordsOnScreen(SearchViewButtons.getEnumFromRssType(rssType).getImgPath(), searchScreen, windowInfo, false);
             log.info("Coords for rss expander for rss {} found at: {}", rssType, rssTypeChoice);
             moveAndClick(rssTypeChoice);
+
+            moveAndClick(lvlChoiceExpander);
+
+            searchViewPath = takeScreenCapture(windowInfo);
+            searchScreen = Imgcodecs.imread(searchViewPath, CONVERT_IMG_FLAG);
+
+            Double[] lvlChoice = findCoordsOnScreen(SearchViewButtons.SEARCH_LEVEL_EXPANDER.getLevelIconImgPath(rssLevel, generalConfig.getGameLanguage()), searchScreen, windowInfo, false);
+            moveAndClick(lvlChoice);
+
 
             Double[] searchOnMapCoords = findCoordsOnScreen(Locale.FRENCH.equals(generalConfig.getGameLanguage()) ? SearchViewButtons.SEARCH_MAP_FR.getImgPath() : SearchViewButtons.SEARCH_MAP_EN.getImgPath(), searchScreen, windowInfo, false);
             moveAndClick(searchOnMapCoords);
@@ -102,6 +113,15 @@ public class CoreMechanics {
             Mat armySelectionScreen = Imgcodecs.imread(armySelectionPath, CONVERT_IMG_FLAG);
 
             Double[] armyPresetCoords = findCoordsOnScreen(ExpeditionViewButtons.PRESET_ICON.getImgPath(), armySelectionScreen, windowInfo, false);
+
+            try {
+                Double[] heroSliderCoords = findCoordsOnScreen(ExpeditionViewButtons.HERO_SLIDER.getImgPath(), armySelectionScreen, windowInfo, false);
+                moveAndClick(heroSliderCoords);
+            }
+            catch(ImageNotMatchedException e){
+                log.info("Hero not avail");
+            }
+
             moveAndClick(armyPresetCoords);
 
             String armyPresetsPath = takeScreenCapture(windowInfo);
@@ -130,7 +150,7 @@ public class CoreMechanics {
 
     }
 
-    public void armyFarming(int armyLvl, int armyPreset, WinUtils.WindowInfo windowInfo, boolean hasEncampment) throws IOException, AWTException, InterruptedException, URISyntaxException {
+    public void armyFarming(String armyLvl, int armyPreset, WinUtils.WindowInfo windowInfo, boolean hasEncampment) throws IOException, AWTException, InterruptedException, URISyntaxException {
 
         moveAndClick(mainMapButtonsCoordsMap.get(windowInfo.getTitle()).get(MainMapButtons.SEARCH));
 
@@ -147,8 +167,20 @@ public class CoreMechanics {
             searchViewPath = takeScreenCapture(windowInfo);
             searchScreen = Imgcodecs.imread(searchViewPath, CONVERT_IMG_FLAG);
 
+            Double[] lvlChoiceExpander = findCoordsOnScreen(SearchViewButtons.SEARCH_LEVEL_EXPANDER.getImgPath(), searchScreen, windowInfo, false);
+
+
             Double[] armyChoice = findCoordsOnScreen(SearchViewButtons.ARMY_ICON.getImgPath(), searchScreen, windowInfo, false);
             moveAndClick(armyChoice);
+
+            moveAndClick(lvlChoiceExpander);
+
+            searchViewPath = takeScreenCapture(windowInfo);
+            searchScreen = Imgcodecs.imread(searchViewPath, CONVERT_IMG_FLAG);
+
+            Double[] lvlChoice = findCoordsOnScreen(SearchViewButtons.SEARCH_LEVEL_EXPANDER.getLevelIconImgPath(armyLvl, generalConfig.getGameLanguage()), searchScreen, windowInfo, false);
+            moveAndClick(lvlChoice);
+
 
             moveAndClick(mapSearchButton);
 
@@ -223,10 +255,6 @@ public class CoreMechanics {
     }
 
     private void goBackToMainMap() throws InterruptedException {
-        robot.keyPress(VK_ESCAPE);
-        robot.keyRelease(VK_ESCAPE);
-        Thread.sleep(generalConfig.getActionIntervalMs());
-
         robot.keyPress(VK_ESCAPE);
         robot.keyRelease(VK_ESCAPE);
         Thread.sleep(generalConfig.getActionIntervalMs());

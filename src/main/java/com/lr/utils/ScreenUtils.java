@@ -25,7 +25,7 @@ public class ScreenUtils {
 
 
     //Somehow this have to be kept low. Investigate / find a decent tutorial on appropriate flags
-    public static final double MIN_QUALITY_THRESHOLD = 0.55;
+    public static final double MIN_QUALITY_THRESHOLD = 0.75;
 
     public static String takeScreenCapture(WinUtils.WindowInfo windowInfo) throws AWTException, IOException {
         Rectangle screenRect = new Rectangle(windowInfo.rect.left, windowInfo.rect.top, Math.abs(windowInfo.rect.right

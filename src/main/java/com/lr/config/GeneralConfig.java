@@ -29,8 +29,8 @@ public class GeneralConfig {
     private Long actionIntervalMs;
     private ActionType actionType;
 
-    public static Double SUPPORTED_IMG_WIDTH = 483D;
-    public static Double SUPPORTED_IMG_HEIGHT = 835D;
+    public static Double SUPPORTED_IMG_WIDTH = 414D;
+    public static Double SUPPORTED_IMG_HEIGHT = 763D;
 
 
 }

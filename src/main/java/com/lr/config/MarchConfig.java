@@ -15,6 +15,8 @@ public class MarchConfig {
 
     private Integer marchesAvailable;
 
-    private Integer targetLevel;
+    //Need to support ALL
+    private String targetRssLevel;
 
+    private String targetArmyLevel;
 }
