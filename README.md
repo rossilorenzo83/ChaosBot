@@ -15,7 +15,7 @@ general.windowsNames[0] = My Window
 general.actionIntervalMs = 5000
 ### Type of action, currently supporting ARMY_FARMING or RSS_FARMING
 general.actionType = ARMY_FARMING
-### Locale used for text on buttons (only fr supported so far)
+### Locale used for text on buttons (only en, fr supported so far)
 general.gameLanguage = fr
 ### Marches available
 farm.marchesAvailable = 3
