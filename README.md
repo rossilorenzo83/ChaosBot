@@ -3,7 +3,7 @@ Tool to automate repetitive tasks into Chaos Conquest game
 
 
 ## Howto run:
-`java -jar .\chaos-conquest-bot-0.0.1-alpha.jar --general.marchesAvailable=1 --general.windowsNames[0]=Toto`
+`java -jar .\chaos-conquest-bot-0.0.1-beta.jar --general.marchesAvailable=1 --general.windowsNames[0]=Toto`
 
 
 ## Overridable properties by command line, with current default values
@@ -19,8 +19,8 @@ general.actionType = ARMY_FARMING
 general.gameLanguage = fr
 ### Marches available
 farm.marchesAvailable = 3
-### Interval between attempts (ms), to be used differently in case of farming armies or rss, in ms
-farm.marchesIntervalMs = 600000
+### Interval between attempts (minutess), to be used differently in case of farming armies or rss, in ms
+farm.marchesIntervalMins = 60
 
 
 
