@@ -3,7 +3,7 @@
 
     <groupId>com.lr</groupId>
     <artifactId>chaos-conquest-bot</artifactId>
-    <version>0.0.1-beta-SNAPSHOT</version>
+    <version>0.0.1-beta</version>
 
 
     <parent>
@@ -54,6 +54,12 @@
         </dependency>
 
         <dependency>
+            <groupId>net.sourceforge.tess4j</groupId>
+            <artifactId>tess4j</artifactId>
+            <version>5.5.0</version>
+        </dependency>
+
+        <dependency>
             <groupId>net.java.dev.jna</groupId>
             <artifactId>jna</artifactId>
             <version>5.11.0</version>
@@ -81,6 +87,10 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webflux</artifactId>
         </dependency>
 
     </dependencies>

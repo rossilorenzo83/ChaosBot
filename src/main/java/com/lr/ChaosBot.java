@@ -8,6 +8,8 @@ import com.lr.config.GeneralConfig;
 import com.lr.config.MarchConfig;
 import com.lr.utils.WinUtils;
 import lombok.extern.slf4j.Slf4j;
+import net.sourceforge.tess4j.TesseractException;
+import net.sourceforge.tess4j.util.LoadLibs;
 import org.opencv.core.Mat;
 import org.opencv.imgcodecs.Imgcodecs;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,8 +17,10 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.web.reactive.function.client.WebClient;
 
 import java.awt.*;
+import java.io.File;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.util.HashMap;
@@ -49,6 +53,9 @@ public class ChaosBot implements CommandLineRunner {
     @Autowired
     MarchConfig marchConfig;
 
+    @Autowired
+    WebClient discordWebClient;
+
 
     public static void main(String[] args) {
         SpringApplication.run(ChaosBot.class, args);
@@ -60,21 +67,15 @@ public class ChaosBot implements CommandLineRunner {
         //Load dll from jar dep
         nu.pattern.OpenCV.loadLocally();
         List<Integer> pidsBS = WinUtils.findPidsMatching(generalConfig.getPidName());
-        log.info("PIDs matching config found:", pidsBS.size());
+        log.info("PIDs matching config found: {}", pidsBS.size());
         List<WinUtils.WindowInfo> hwndList = WinUtils.findAllWindowsMatching(pidsBS, generalConfig.getWindowsNames());
-        log.info("Windows matching config found:", hwndList.size());
+        log.info("Windows matching config found: {}", hwndList.size());
 
 
         try {
 
-            hwndList.stream().forEach(
-                    windowInfo -> {
-
-                        executorService.execute(() -> {
-                            mainLogic(windowInfo);
-
-                        });
-                    });
+            hwndList.forEach(
+                    windowInfo -> executorService.execute(() -> mainLogic(windowInfo)));
         } finally {
             executorService.shutdown();
         }
@@ -138,6 +139,13 @@ public class ChaosBot implements CommandLineRunner {
                             coreMechanics.armyFarming(marchConfig.getTargetArmyLevel(), availMarches, windowInfo, hasEncampments);
                             break;
 
+                        case CHALLENGE_STATS:
+                            File tmpFolder = LoadLibs.extractTessResources("win32-x86-64");
+                            System.setProperty("java.library.path", tmpFolder.getPath());
+                            coreMechanics.challengeStats(windowInfo, discordWebClient);
+                            break;
+
+
                         case RSS_FARMING:
                         default: coreMechanics.findAndFarm(marchConfig.getTargetRssLevel(), RssType.values()[random.nextInt(RssType.values().length)], windowInfo, hasEncampments);
                                  break;
@@ -148,10 +156,7 @@ public class ChaosBot implements CommandLineRunner {
                 }
             }
 
-
-        } catch (AWTException e) {
-            e.printStackTrace();
-        } catch (IOException | URISyntaxException | InterruptedException e) {
+        } catch (AWTException | IOException | URISyntaxException | InterruptedException |TesseractException e) {
             e.printStackTrace();
         }
     }

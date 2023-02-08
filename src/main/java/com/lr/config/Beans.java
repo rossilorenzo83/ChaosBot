@@ -1,5 +1,6 @@
 package com.lr.config;
 
+import net.sourceforge.tess4j.Tesseract;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -12,21 +13,31 @@ import java.util.concurrent.Executors;
 @Configuration
 public class Beans {
 
-    @Autowired
+    final
     GeneralConfig generalConfig;
+
+
+    @Autowired
+    public Beans(GeneralConfig generalConfig) {
+        this.generalConfig = generalConfig;
+    }
 
     @Bean
     public Robot sharedRobot() throws AWTException {
         return new Robot();
-    };
+    }
 
     @Bean
     public Random sharedRandom() {
         return new Random();
     }
+    
+    @Bean
+    public Tesseract ocrEngine() { return new Tesseract(); }
 
     @Bean
     public ExecutorService getThreadPool(){
         return Executors.newFixedThreadPool(generalConfig.getWindowsNames().size());
     }
+
 }

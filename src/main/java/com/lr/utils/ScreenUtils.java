@@ -3,10 +3,13 @@ package com.lr.utils;
 import com.lr.business.ImageNotMatchedException;
 import com.lr.config.GeneralConfig;
 import lombok.extern.slf4j.Slf4j;
+import net.sourceforge.tess4j.Tesseract;
+import net.sourceforge.tess4j.TesseractException;
 import org.opencv.core.Point;
 import org.opencv.core.*;
 import org.opencv.imgcodecs.Imgcodecs;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.ResourceLoader;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
@@ -18,6 +21,7 @@ import java.net.URISyntaxException;
 import java.nio.file.StandardCopyOption;
 
 import static com.lr.business.CoreMechanics.CONVERT_IMG_FLAG;
+import static org.opencv.core.Core.*;
 import static org.opencv.imgproc.Imgproc.*;
 
 @Slf4j
@@ -25,14 +29,27 @@ public class ScreenUtils {
 
 
     //Somehow this have to be kept low. Investigate / find a decent tutorial on appropriate flags
-    public static final double MIN_QUALITY_THRESHOLD = 0.75;
+    public static final double MIN_QUALITY_THRESHOLD = 0.70;
 
+
+    /**
+     * Return a string containing the filePath of the captured image
+     *
+     * @param windowInfo
+     * @return
+     * @throws AWTException
+     * @throws IOException
+     */
     public static String takeScreenCapture(WinUtils.WindowInfo windowInfo) throws AWTException, IOException {
+        return takeScreenCapture(windowInfo, "");
+    }
+
+    public static String takeScreenCapture(WinUtils.WindowInfo windowInfo, String postfix) throws AWTException, IOException {
         Rectangle screenRect = new Rectangle(windowInfo.rect.left, windowInfo.rect.top, Math.abs(windowInfo.rect.right
                 - windowInfo.rect.left), Math.abs(windowInfo.rect.bottom - windowInfo.rect.top));
-        ;
+
         BufferedImage capture = new Robot().createScreenCapture(screenRect);
-        String filePath = "tmp" + windowInfo.title + ".jpg";
+        String filePath = "tmp" + windowInfo.title + postfix + ".jpg";
         ImageIO.write(capture, "jpg", new File(filePath ));
         return filePath;
     }
@@ -59,9 +76,9 @@ public class ScreenUtils {
             Mat resizedToMatch = resizeImage(toMatch, scaleFactor);
             log.info("Resized template image dimensions: {}", resizedToMatch.size().toString());
 
-            int machMethod = TM_CCOEFF_NORMED;
+
             Mat outputImage = new Mat();
-            matchTemplate(fullScreenImg, resizedToMatch, outputImage, machMethod);
+            matchTemplate(fullScreenImg, resizedToMatch, outputImage, TM_CCOEFF_NORMED);
 
             Core.MinMaxLocResult mmr = Core.minMaxLoc(outputImage);
 
@@ -90,6 +107,15 @@ public class ScreenUtils {
 
     }
 
+    public static String extractTextFromImage(String imgPath, Tesseract ocrEngine, ResourceLoader resourceLoader) throws TesseractException {
+        ocrEngine.setLanguage("eng");
+        ocrEngine.setDatapath("C:\\Users\\Lorenzo\\tessdata");
+        ocrEngine.setPageSegMode(12);
+        ocrEngine.setOcrEngineMode(1);
+        return ocrEngine.doOCR(new File(imgPath));
+    }
+
+
     private static Double computeScaleFactor(Mat originalImage) {
         //scale for height
         Double scaleHeight = originalImage.height()/ GeneralConfig.SUPPORTED_IMG_HEIGHT;
@@ -107,5 +133,19 @@ public class ScreenUtils {
         Size size = new Size(originalImage.width()*scaleFactor, originalImage.height()*scaleFactor);
         resize(originalImage, resizedImage, size);
         return resizedImage;
+    }
+
+    public static Boolean isSameImage(Mat image1, Mat image2){
+
+        Mat difference = new Mat();
+        Mat grey1 =  new Mat();
+        Mat grey2 =  new Mat();
+
+        cvtColor(image1, grey1, COLOR_BGR2GRAY);
+        cvtColor(image2, grey2, COLOR_BGR2GRAY);
+        compare(grey1, grey2, difference, CMP_NE);
+
+
+        return countNonZero(difference) == 0;
     }
 }

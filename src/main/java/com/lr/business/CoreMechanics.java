@@ -2,20 +2,32 @@ package com.lr.business;
 
 
 import com.lr.config.GeneralConfig;
+import com.lr.utils.ScreenUtils;
 import com.lr.utils.WinUtils;
 import lombok.extern.slf4j.Slf4j;
+import net.sourceforge.tess4j.Tesseract;
+import net.sourceforge.tess4j.TesseractException;
 import org.opencv.core.Mat;
 import org.opencv.imgcodecs.Imgcodecs;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.ResourceLoader;
+import org.springframework.http.client.MultipartBodyBuilder;
 import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.BodyInserters;
+import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientException;
 
 import java.awt.*;
+import java.awt.event.KeyEvent;
 import java.io.IOException;
 import java.net.URISyntaxException;
+import java.time.LocalDateTime;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentMap;
 
+import static com.lr.business.ChallengeViewButtons.PAST_CHALLENGE_ALLIANCE_BANNER_FR;
 import static com.lr.utils.ScreenUtils.findCoordsOnScreen;
 import static com.lr.utils.ScreenUtils.takeScreenCapture;
 import static java.awt.event.InputEvent.BUTTON1_DOWN_MASK;
@@ -27,7 +39,9 @@ import static org.opencv.imgcodecs.Imgcodecs.IMREAD_COLOR;
 public class CoreMechanics {
 
 
-    private Robot robot;
+    private final Robot robot;
+
+    private final Tesseract ocrEngine;
     public static int CONVERT_IMG_FLAG = IMREAD_COLOR;
 
     public void setMainMapButtonsCoordsMap(ConcurrentMap<String, Map<MainMapButtons, Double[]>> mainMapButtonsCoordsMap) {
@@ -41,12 +55,16 @@ public class CoreMechanics {
     private ConcurrentMap<String, Map<MainMapButtons, Double[]>> mainMapButtonsCoordsMap;
 
 
-    private GeneralConfig generalConfig;
+    private final GeneralConfig generalConfig;
+
+    private final ResourceLoader resourceLoader;
 
     @Autowired
-    public CoreMechanics(Robot robot, GeneralConfig generalConfig) {
+    public CoreMechanics(Robot robot, Tesseract ocrEngine, GeneralConfig generalConfig, ResourceLoader resourceLoader) {
         this.robot = robot;
+        this.ocrEngine = ocrEngine;
         this.generalConfig = generalConfig;
+        this.resourceLoader = resourceLoader;
     }
 
 
@@ -117,8 +135,7 @@ public class CoreMechanics {
             try {
                 Double[] heroSliderCoords = findCoordsOnScreen(ExpeditionViewButtons.HERO_SLIDER.getImgPath(), armySelectionScreen, windowInfo, false);
                 moveAndClick(heroSliderCoords);
-            }
-            catch(ImageNotMatchedException e){
+            } catch (ImageNotMatchedException e) {
                 log.info("Hero not avail");
             }
 
@@ -231,6 +248,141 @@ public class CoreMechanics {
 
     }
 
+    public void challengeStats(WinUtils.WindowInfo windowInfo, WebClient discordWebClient) throws IOException, AWTException, URISyntaxException, InterruptedException, TesseractException {
+
+        //Get focus
+        moveAndClick(findWindowCenterCoords(windowInfo));
+
+
+        try {
+            robot.keyPress(KeyEvent.VK_D);
+            robot.keyRelease(KeyEvent.VK_D);
+            Thread.sleep(generalConfig.getActionIntervalMs());
+
+            String challengePage = takeScreenCapture(windowInfo);
+            Mat locationSelectionScreen = Imgcodecs.imread(challengePage, CONVERT_IMG_FLAG);
+            Double[] pastChallengeCoords = findCoordsOnScreen(ChallengeViewButtons.PAST_CHALLENGE_TAB_FR.getImgPath(), locationSelectionScreen, windowInfo, false);
+
+            moveAndClick(pastChallengeCoords);
+
+            String pastChallengePage = takeScreenCapture(windowInfo);
+            Mat pastChallengePageMat = Imgcodecs.imread(pastChallengePage, CONVERT_IMG_FLAG);
+            Mat pastChallengeCurrentPageMat = pastChallengePageMat;
+
+            Double[] bottomCoords = findWindowBottomCoords(windowInfo);
+            robot.mouseMove(bottomCoords[0].intValue(), bottomCoords[1].intValue());
+            Thread.sleep(generalConfig.getActionIntervalMs());
+
+            int mainScrollCounter = 0;
+            boolean prevNotFound = false;
+            do {
+
+                try {
+                    pastChallengePageMat = pastChallengeCurrentPageMat;
+                    Double[] coords = findCoordsOnScreen(PAST_CHALLENGE_ALLIANCE_BANNER_FR.getImgPath(), pastChallengePageMat, windowInfo, false);
+                    moveAndClick(coords);
+
+                    MultipartBodyBuilder discordRestbuilder = new MultipartBodyBuilder();
+                    discordRestbuilder.part("content","Stats from past 6d, timestamp:" + LocalDateTime.now());
+
+
+                    String challengeDetailsScreenCapturePath = takeScreenCapture(windowInfo);
+
+                    int scrollCounter = 0;
+                    discordRestbuilder.part("files["+scrollCounter+"]", new FileSystemResource("tmp" + windowInfo.getTitle() + ".jpg"));
+
+                    Mat challengeDetailsScreenCapture = Imgcodecs.imread(challengeDetailsScreenCapturePath, CONVERT_IMG_FLAG);
+                    coords = findCoordsOnScreen(ChallengeViewButtons.PAST_CHALLENGE_CONTRIBS_BTTN_FR.getImgPath(), challengeDetailsScreenCapture, windowInfo, false);
+                    moveAndClick(coords);
+                    String challengeScorersScreenCapturePath = takeScreenCapture(windowInfo, "scores"+scrollCounter);
+                    Mat challengeScorersScreenCapture = Imgcodecs.imread(challengeDetailsScreenCapturePath, CONVERT_IMG_FLAG);
+                    Mat challengeScorersCurrentScreenCapture = challengeScorersScreenCapture;
+                    //FIXME
+
+
+
+
+                    do {
+
+                        bottomCoords = findWindowBottomCoords(windowInfo);
+                        robot.mouseMove(bottomCoords[0].intValue(), bottomCoords[1].intValue());
+                        Thread.sleep(generalConfig.getActionIntervalMs());
+
+
+                        challengeScorersScreenCapture = challengeScorersCurrentScreenCapture;
+                        log.info("Extracting stats");
+                        //FIXME
+                        String textToBePosted = ScreenUtils.extractTextFromImage(challengeScorersScreenCapturePath, ocrEngine, resourceLoader);
+
+                        robot.mouseWheel(3);
+                        Thread.sleep(generalConfig.getActionIntervalMs());
+
+                        discordRestbuilder.part("files["+scrollCounter+"]", new FileSystemResource("tmp" + windowInfo.getTitle() + "scores" +scrollCounter + ".jpg"));
+                        scrollCounter++;
+
+
+                        String challengeScorersCurrentScreenCapturePath = takeScreenCapture(windowInfo, "scores" +scrollCounter);
+                        challengeScorersCurrentScreenCapture = Imgcodecs.imread(challengeScorersCurrentScreenCapturePath, CONVERT_IMG_FLAG);
+                        challengeScorersScreenCapturePath = challengeScorersCurrentScreenCapturePath;
+                    }
+                    while (scrollCounter < 3);
+
+                    discordRestbuilder.part("files["+scrollCounter+"]", new FileSystemResource("tmp" + windowInfo.getTitle() + "scores" +scrollCounter + ".jpg"));
+                    log.info("Publish on discord");
+
+
+                    try {
+                        discordWebClient.post().uri("/messages").body(BodyInserters.fromMultipartData(discordRestbuilder.build())).retrieve().bodyToMono(String.class).block();
+
+                    }
+                    catch(WebClientException e){
+                        log.error("Error calling discord api: {}", e.getMessage());
+                    }
+
+
+
+                    robot.keyPress(VK_ESCAPE);
+                    robot.keyRelease(VK_ESCAPE);
+                    Thread.sleep(generalConfig.getActionIntervalMs());
+
+                    robot.keyPress(VK_ESCAPE);
+                    robot.keyRelease(VK_ESCAPE);
+                    Thread.sleep(generalConfig.getActionIntervalMs());
+                    mainScrollCounter++;
+                    prevNotFound = false;
+
+                    //Refocus
+                    bottomCoords = findWindowBottomCoords(windowInfo);
+                    robot.mouseMove(bottomCoords[0].intValue(), bottomCoords[1].intValue());
+                    Thread.sleep(generalConfig.getActionIntervalMs());
+
+                } catch (ImageNotMatchedException e) {
+                    log.info("Challenge not found move fwd");
+                    prevNotFound = true;
+                }
+                //Scroll
+
+                if(prevNotFound){
+                    robot.mouseWheel(1);
+                }else {
+                    robot.mouseWheel(mainScrollCounter);
+                }
+                Thread.sleep(generalConfig.getActionIntervalMs());
+                String pastChallengeCurrentPage = takeScreenCapture(windowInfo);
+                pastChallengeCurrentPageMat = Imgcodecs.imread(pastChallengeCurrentPage, CONVERT_IMG_FLAG);
+            }
+            while (mainScrollCounter < 10);
+
+            //Get back to map screen
+            robot.keyPress(VK_ESCAPE);
+            robot.keyRelease(VK_ESCAPE);
+            Thread.sleep(generalConfig.getActionIntervalMs());
+
+        } catch (ImageNotMatchedException e) {
+            log.error(e.getMessage());
+        }
+    }
+
     private void handleStartLocationScreen(WinUtils.WindowInfo windowInfo) throws AWTException, IOException, URISyntaxException, ImageNotMatchedException, InterruptedException {
         String locationSelectionPath = takeScreenCapture(windowInfo);
         Mat locationSelectionScreen = Imgcodecs.imread(locationSelectionPath, CONVERT_IMG_FLAG);
@@ -240,10 +392,16 @@ public class CoreMechanics {
         moveAndClick(nextBtnCoords);
     }
 
-    private Double[] findWindowCenterCoords(WinUtils.WindowInfo windowInfo) {
+    public static Double[] findWindowCenterCoords(WinUtils.WindowInfo windowInfo) {
         Rectangle screenRect = new Rectangle(windowInfo.getRect().left, windowInfo.getRect().top, Math.abs(windowInfo.getRect().right
                 - windowInfo.getRect().left), Math.abs(windowInfo.getRect().bottom - windowInfo.getRect().top));
         return new Double[]{screenRect.getX() + screenRect.getWidth() / 2, screenRect.getY() + screenRect.getHeight() / 2};
+    }
+
+    public static Double[] findWindowBottomCoords(WinUtils.WindowInfo windowInfo) {
+        Rectangle screenRect = new Rectangle(windowInfo.getRect().left, windowInfo.getRect().top, Math.abs(windowInfo.getRect().right
+                - windowInfo.getRect().left), Math.abs(windowInfo.getRect().bottom - windowInfo.getRect().top));
+        return new Double[]{screenRect.getX() + screenRect.getWidth() / 2, screenRect.getY() + screenRect.getHeight() * 2 / 3};
     }
 
     private void moveAndClick(Double[] coords) throws InterruptedException {
@@ -253,6 +411,12 @@ public class CoreMechanics {
         Thread.sleep(generalConfig.getActionIntervalMs());
 
     }
+
+    private void scrollAndExtract() throws InterruptedException {
+        robot.mouseWheel(1);
+        Thread.sleep(generalConfig.getActionIntervalMs());
+    }
+
 
     private void goBackToMainMap() throws InterruptedException {
         robot.keyPress(VK_ESCAPE);
