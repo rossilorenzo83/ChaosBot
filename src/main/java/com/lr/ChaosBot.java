@@ -1,9 +1,6 @@
 package com.lr;
 
-import com.lr.business.CoreMechanics;
-import com.lr.business.ImageNotMatchedException;
-import com.lr.business.MainMapButtons;
-import com.lr.business.RssType;
+import com.lr.business.*;
 import com.lr.config.GeneralConfig;
 import com.lr.config.MarchConfig;
 import com.lr.utils.WinUtils;
@@ -23,10 +20,8 @@ import java.awt.*;
 import java.io.File;
 import java.io.IOException;
 import java.net.URISyntaxException;
-import java.util.HashMap;
+import java.util.*;
 import java.util.List;
-import java.util.Map;
-import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
@@ -97,7 +92,7 @@ public class ChaosBot implements CommandLineRunner {
                 log.info("Searching coords for control:" + mainMapButton.name());
                 try {
 
-                    Double[] absCoords = findCoordsOnScreen(mainMapButton.getImgPath(), fullScreen, windowInfo, true);
+                    Double[] absCoords = findCoordsOnScreen(mainMapButton.getImgPath(), fullScreen, windowInfo, true, generalConfig.getImageQualityLowerBound());
                     currentWindowCoords.put(mainMapButton, absCoords);
 
                 } catch (ImageNotMatchedException e) {
@@ -123,7 +118,7 @@ public class ChaosBot implements CommandLineRunner {
 
                 // Search coords
 
-                if (availMarches == 0 && (System.currentTimeMillis() - timeLastActionPerformed) > (marchConfig.getMarchesIntervalMins() * 60 *1000)) {
+                if (availMarches == 0 && (System.currentTimeMillis() - timeLastActionPerformed) > (marchConfig.getMarchesIntervalMins() * 60 * 1000)) {
                     log.info("Timer expired");
                     availMarches = marchConfig.getMarchesAvailable();
                 }
@@ -142,13 +137,17 @@ public class ChaosBot implements CommandLineRunner {
                         case CHALLENGE_STATS:
                             File tmpFolder = LoadLibs.extractTessResources("win32-x86-64");
                             System.setProperty("java.library.path", tmpFolder.getPath());
-                            coreMechanics.challengeStats(windowInfo, discordWebClient);
-                            break;
+                            List<ChallengeViewButtons> listChallengeViewButtons = Arrays.asList(new ChallengeViewButtons[]{ChallengeViewButtons.PAST_CHALLENGE_ALLIANCE_BANNER_FR, ChallengeViewButtons.PAST_CHALLENGE_HORDE_BANNER_FR, ChallengeViewButtons.PAST_CHALLENGE_LEGION_BANNER_FR});
+                            for (ChallengeViewButtons challengeViewButton : listChallengeViewButtons) {
+                                coreMechanics.challengeStats(windowInfo, discordWebClient, challengeViewButton);
+                            }
+                            return;
 
 
                         case RSS_FARMING:
-                        default: coreMechanics.findAndFarm(marchConfig.getTargetRssLevel(), RssType.values()[random.nextInt(RssType.values().length)], windowInfo, hasEncampments);
-                                 break;
+                        default:
+                            coreMechanics.findAndFarm(marchConfig.getTargetRssLevel(), RssType.values()[random.nextInt(RssType.values().length)], windowInfo, hasEncampments);
+                            break;
                     }
 
                     availMarches--;
@@ -156,7 +155,7 @@ public class ChaosBot implements CommandLineRunner {
                 }
             }
 
-        } catch (AWTException | IOException | URISyntaxException | InterruptedException |TesseractException e) {
+        } catch (AWTException | IOException | URISyntaxException | InterruptedException | TesseractException e) {
             e.printStackTrace();
         }
     }

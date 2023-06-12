@@ -28,9 +28,6 @@ import static org.opencv.imgproc.Imgproc.*;
 public class ScreenUtils {
 
 
-    //Somehow this have to be kept low. Investigate / find a decent tutorial on appropriate flags
-    public static final double MIN_QUALITY_THRESHOLD = 0.70;
-
 
     /**
      * Return a string containing the filePath of the captured image
@@ -54,7 +51,7 @@ public class ScreenUtils {
         return filePath;
     }
 
-    public static Double[] findCoordsOnScreen(String pathImgToFind, Mat fullScreenImg, WinUtils.WindowInfo windowInfo, Boolean inMainMap) throws URISyntaxException, ImageNotMatchedException, IOException {
+    public static Double[] findCoordsOnScreen(String pathImgToFind, Mat fullScreenImg, WinUtils.WindowInfo windowInfo, Boolean inMainMap, Double minQualityThreshold) throws URISyntaxException, ImageNotMatchedException, IOException {
 
         try {
 
@@ -82,7 +79,7 @@ public class ScreenUtils {
 
             Core.MinMaxLocResult mmr = Core.minMaxLoc(outputImage);
 
-            if (mmr.maxVal >= MIN_QUALITY_THRESHOLD) {
+            if (mmr.maxVal >= minQualityThreshold) {
 
                 log.info("Template matched with confidence: {}", mmr.maxVal);
                 org.opencv.core.Point matchLoc = mmr.maxLoc;

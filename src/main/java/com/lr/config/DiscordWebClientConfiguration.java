@@ -17,7 +17,6 @@ public class DiscordWebClientConfiguration {
     private String botAuthToken;
     private String channelId;
 
-
     @Bean
     public WebClient discordWebClient() {
 

@@ -16,7 +16,9 @@ public enum ExpeditionViewButtons {
     LAUNCH_EXPEDITION_BUTTON_EN("launch_march_en.PNG"),
     LAUNCH_EXPEDITION_BUTTON_FR("launch_march_fr.PNG"),
     LAUNCH_ATTACK_BUTTON_EN("launch_attack_en.PNG"),
-    LAUNCH_ATTACK_BUTTON_FR("launch_attack_fr.PNG");
+    LAUNCH_ATTACK_BUTTON_FR("launch_attack_fr.PNG"),
+    CONFIRM_ATTACK_BUTTON_EN("confirm_army_too_powerful_fr.PNG"),
+    CONFIRM_ATTACK_BUTTON_FR("confirm_army_too_powerful_fr.PNG");
 
     public String getImgPath() {
         return imgPath;
