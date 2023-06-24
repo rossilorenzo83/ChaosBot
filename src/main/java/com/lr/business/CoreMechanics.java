@@ -231,7 +231,7 @@ public class CoreMechanics {
 
             moveAndClick(launchPartyButton);
 
-            if(Integer.parseInt(armyLvl) >= FAT_ARMY_THRESHOLD) {
+            if(!"ALL".equalsIgnoreCase(armyLvl) && Integer.parseInt(armyLvl) >= FAT_ARMY_THRESHOLD) {
                 armySelectionViewPath = takeScreenCapture(windowInfo);
                 searchScreen = Imgcodecs.imread(armySelectionViewPath, CONVERT_IMG_FLAG);
 
