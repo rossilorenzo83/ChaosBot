@@ -128,6 +128,10 @@ public class ChaosBot implements CommandLineRunner {
 
                     log.info("Exec started . . . ");
 
+                    File tmpFolder = LoadLibs.extractTessResources("win32-x86-64");
+                    log.info("Tessaract tmp folder path:", tmpFolder.getPath());
+                    System.setProperty("java.library.path", tmpFolder.getPath());
+
                     switch (generalConfig.getActionType()) {
 
                         case ARMY_FARMING:
@@ -135,14 +139,16 @@ public class ChaosBot implements CommandLineRunner {
                             break;
 
                         case CHALLENGE_STATS:
-                            File tmpFolder = LoadLibs.extractTessResources("win32-x86-64");
-                            System.setProperty("java.library.path", tmpFolder.getPath());
+
                             List<ChallengeViewButtons> listChallengeViewButtons = Arrays.asList(new ChallengeViewButtons[]{ChallengeViewButtons.PAST_CHALLENGE_ALLIANCE_BANNER_FR, ChallengeViewButtons.PAST_CHALLENGE_HORDE_BANNER_FR, ChallengeViewButtons.PAST_CHALLENGE_LEGION_BANNER_FR});
                             for (ChallengeViewButtons challengeViewButton : listChallengeViewButtons) {
                                 coreMechanics.challengeStats(windowInfo, discordWebClient, challengeViewButton);
                             }
-                            return;
+                            break;
 
+                        case DONORS_STATS:
+                            coreMechanics.receivedRss(windowInfo, discordWebClient);
+                            break;
 
                         case RSS_FARMING:
                         default:

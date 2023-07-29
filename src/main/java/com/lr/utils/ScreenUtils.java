@@ -9,7 +9,6 @@ import org.opencv.core.Point;
 import org.opencv.core.*;
 import org.opencv.imgcodecs.Imgcodecs;
 import org.springframework.core.io.ClassPathResource;
-import org.springframework.core.io.ResourceLoader;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
@@ -104,11 +103,7 @@ public class ScreenUtils {
 
     }
 
-    public static String extractTextFromImage(String imgPath, Tesseract ocrEngine, ResourceLoader resourceLoader) throws TesseractException {
-        ocrEngine.setLanguage("eng");
-        ocrEngine.setDatapath("C:\\Users\\Lorenzo\\tessdata");
-        ocrEngine.setPageSegMode(12);
-        ocrEngine.setOcrEngineMode(1);
+    public static String extractTextFromImage(String imgPath, Tesseract ocrEngine) throws TesseractException {
         return ocrEngine.doOCR(new File(imgPath));
     }
 

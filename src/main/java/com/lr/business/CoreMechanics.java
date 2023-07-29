@@ -2,6 +2,7 @@ package com.lr.business;
 
 
 import com.lr.config.GeneralConfig;
+import com.lr.utils.ScreenUtils;
 import com.lr.utils.WinUtils;
 import lombok.extern.slf4j.Slf4j;
 import net.sourceforge.tess4j.Tesseract;
@@ -37,6 +38,7 @@ public class CoreMechanics {
 
 
     public static final int FAT_ARMY_THRESHOLD = 15;
+    public static final int SCROLL_AMOUNT = 20;
     private final Robot robot;
 
     private final Tesseract ocrEngine;
@@ -63,6 +65,7 @@ public class CoreMechanics {
         this.ocrEngine = ocrEngine;
         this.generalConfig = generalConfig;
         this.resourceLoader = resourceLoader;
+
     }
 
 
@@ -231,7 +234,7 @@ public class CoreMechanics {
 
             moveAndClick(launchPartyButton);
 
-            if(!"ALL".equalsIgnoreCase(armyLvl) && Integer.parseInt(armyLvl) >= FAT_ARMY_THRESHOLD) {
+            if (!"ALL".equalsIgnoreCase(armyLvl) && Integer.parseInt(armyLvl) >= FAT_ARMY_THRESHOLD) {
                 armySelectionViewPath = takeScreenCapture(windowInfo);
                 searchScreen = Imgcodecs.imread(armySelectionViewPath, CONVERT_IMG_FLAG);
 
@@ -288,80 +291,72 @@ public class CoreMechanics {
                 pastChallengePageMat = pastChallengeCurrentPageMat;
 
 
-                    try {
-                        Double[] coords = findCoordsOnScreen(challengeViewButtons.getImgPath(), pastChallengePageMat, windowInfo, false, generalConfig.getImageQualityLowerBound());
-                        moveAndClick(coords);
+                try {
+                    Double[] coords = findCoordsOnScreen(challengeViewButtons.getImgPath(), pastChallengePageMat, windowInfo, false, generalConfig.getImageQualityLowerBound());
+                    moveAndClick(coords);
 
-                        MultipartBodyBuilder discordRestbuilder = new MultipartBodyBuilder();
-
-
-                        String challengeDetailsScreenCapturePath = takeScreenCapture(windowInfo);
-
-                        int scrollCounter = 0;
-                        discordRestbuilder.part("files[" + scrollCounter + "]", new FileSystemResource("tmp" + windowInfo.getTitle() + ".jpg"));
-
-//        StringBuffer contextText = new StringBuffer("Stats for challenge:\n");
-
-                        Mat challengeDetailsScreenCapture = Imgcodecs.imread(challengeDetailsScreenCapturePath, CONVERT_IMG_FLAG);
-                        coords = findCoordsOnScreen(ChallengeViewButtons.PAST_CHALLENGE_CONTRIBS_BTTN_FR.getImgPath(), challengeDetailsScreenCapture, windowInfo, false, generalConfig.getImageQualityLowerBound());
-                        moveAndClick(coords);
-                        String challengeScorersScreenCapturePath = takeScreenCapture(windowInfo, "scores" + scrollCounter);
-                        discordRestbuilder.part("files[" + scrollCounter+1 + "]", new FileSystemResource("tmp" + windowInfo.getTitle() + "scores" + scrollCounter + ".jpg"));
-                        Mat challengeScorersScreenCapture = Imgcodecs.imread(challengeDetailsScreenCapturePath, CONVERT_IMG_FLAG);
-                        Mat challengeScorersCurrentScreenCapture = challengeScorersScreenCapture;
-
-                        do {
-
-                            bottomCoords = findWindowBottomCoords(windowInfo);
-                            robot.mouseMove(bottomCoords[0].intValue(), bottomCoords[1].intValue());
-                            Thread.sleep(generalConfig.getActionIntervalMs());
+                    MultipartBodyBuilder discordRestbuilder = new MultipartBodyBuilder();
 
 
-                            challengeScorersScreenCapture = challengeScorersCurrentScreenCapture;
+                    String challengeDetailsScreenCapturePath = takeScreenCapture(windowInfo);
 
-//            contextText.append(ScreenUtils.extractTextFromImage(challengeScorersScreenCapturePath, ocrEngine, resourceLoader));
+                    int scrollCounter = 0;
+                    discordRestbuilder.part("files[" + scrollCounter + "]", new FileSystemResource("tmp" + windowInfo.getTitle() + ".jpg"));
 
+                    StringBuffer contextText = new StringBuffer("Stats for challenge:\n");
 
-                            robot.mouseWheel(3);
-                            Thread.sleep(generalConfig.getActionIntervalMs());
+                    Mat challengeDetailsScreenCapture = Imgcodecs.imread(challengeDetailsScreenCapturePath, CONVERT_IMG_FLAG);
+                    coords = findCoordsOnScreen(ChallengeViewButtons.PAST_CHALLENGE_CONTRIBS_BTTN_FR.getImgPath(), challengeDetailsScreenCapture, windowInfo, false, generalConfig.getImageQualityLowerBound());
+                    moveAndClick(coords);
+                    String challengeScorersScreenCapturePath = takeScreenCapture(windowInfo, "scores" + scrollCounter);
+                    discordRestbuilder.part("files[" + scrollCounter + 1 + "]", new FileSystemResource("tmp" + windowInfo.getTitle() + "scores" + scrollCounter + ".jpg"));
+                    Mat challengeScorersScreenCapture = Imgcodecs.imread(challengeDetailsScreenCapturePath, CONVERT_IMG_FLAG);
+                    Mat challengeScorersCurrentScreenCapture = challengeScorersScreenCapture;
 
-                            scrollCounter++;
-                            String challengeScorersCurrentScreenCapturePath = takeScreenCapture(windowInfo, "scores" + scrollCounter);
-                            discordRestbuilder.part("files[" + scrollCounter+1 + "]", new FileSystemResource("tmp" + windowInfo.getTitle() + "scores" + scrollCounter + ".jpg"));
-                            challengeScorersCurrentScreenCapture = Imgcodecs.imread(challengeScorersCurrentScreenCapturePath, CONVERT_IMG_FLAG);
-                            challengeScorersScreenCapturePath = challengeScorersCurrentScreenCapturePath;
-                        }
-                        while (scrollCounter < 3);
+                    do {
 
-//        contextText.append(ScreenUtils.extractTextFromImage(challengeScorersScreenCapturePath, ocrEngine, resourceLoader));
-//        discordRestbuilder.part("content", contextText.toString());
-
-                        if(!generalConfig.isPostDryRun()) {
-                            log.info("Publish on discord");
-                            try {
-                                discordWebClient.post().uri("/messages").body(BodyInserters.fromMultipartData(discordRestbuilder.build())).retrieve().bodyToMono(String.class).block();
-
-                            } catch (WebClientException e) {
-                                log.error("Error calling discord api: {}", e.getMessage());
-                            }
-                        }
-
-
-                        robot.keyPress(VK_ESCAPE);
-                        robot.keyRelease(VK_ESCAPE);
+                        bottomCoords = findWindowBottomCoords(windowInfo);
+                        robot.mouseMove(bottomCoords[0].intValue(), bottomCoords[1].intValue());
                         Thread.sleep(generalConfig.getActionIntervalMs());
 
-                        robot.keyPress(VK_ESCAPE);
-                        robot.keyRelease(VK_ESCAPE);
+
+                        challengeScorersScreenCapture = challengeScorersCurrentScreenCapture;
+
+                        contextText.append(ScreenUtils.extractTextFromImage(challengeScorersScreenCapturePath, ocrEngine));
+
+
+                        robot.mouseWheel(3);
                         Thread.sleep(generalConfig.getActionIntervalMs());
-                        prevNotFound = false;
 
-
-                    } catch (ImageNotMatchedException e) {
-                        log.info("Challenge not found move fwd");
-                        prevNotFound = true;
-
+                        scrollCounter++;
+                        String challengeScorersCurrentScreenCapturePath = takeScreenCapture(windowInfo, "scores" + scrollCounter);
+                        discordRestbuilder.part("files[" + scrollCounter + 1 + "]", new FileSystemResource("tmp" + windowInfo.getTitle() + "scores" + scrollCounter + ".jpg"));
+                        challengeScorersCurrentScreenCapture = Imgcodecs.imread(challengeScorersCurrentScreenCapturePath, CONVERT_IMG_FLAG);
+                        challengeScorersScreenCapturePath = challengeScorersCurrentScreenCapturePath;
                     }
+                    while (scrollCounter < 3);
+
+                    contextText.append(ScreenUtils.extractTextFromImage(challengeScorersScreenCapturePath, ocrEngine));
+                    discordRestbuilder.part("content", contextText.toString());
+
+                    publishContentOnDiscord(discordWebClient, discordRestbuilder);
+
+
+                    robot.keyPress(VK_ESCAPE);
+                    robot.keyRelease(VK_ESCAPE);
+                    Thread.sleep(generalConfig.getActionIntervalMs());
+
+                    robot.keyPress(VK_ESCAPE);
+                    robot.keyRelease(VK_ESCAPE);
+                    Thread.sleep(generalConfig.getActionIntervalMs());
+                    prevNotFound = false;
+
+
+                } catch (ImageNotMatchedException e) {
+                    log.info("Challenge not found move fwd");
+                    prevNotFound = true;
+
+                }
 
                 mainScrollCounter++;
                 log.info("Arrived at {} scrolls", mainScrollCounter);
@@ -370,21 +365,12 @@ public class CoreMechanics {
                 robot.mouseMove(bottomCoords[0].intValue(), bottomCoords[1].intValue());
                 Thread.sleep(generalConfig.getActionIntervalMs());
 
-                if (prevNotFound) {
-                    robot.mouseWheel(1);
-                    Thread.sleep(generalConfig.getActionIntervalMs());
-                } else {
-                    log.info("Scrolling {} times", mainScrollCounter);
-                    for(int i=0; i<mainScrollCounter ;i++){
-                        robot.mouseWheel(1);
-                        Thread.sleep(generalConfig.getActionIntervalMs());
-                    }
-                }
+                proceedScrolling(mainScrollCounter, prevNotFound);
 
                 String pastChallengeCurrentPage = takeScreenCapture(windowInfo);
                 pastChallengeCurrentPageMat = Imgcodecs.imread(pastChallengeCurrentPage, CONVERT_IMG_FLAG);
             }
-            while (mainScrollCounter < 20);
+            while (mainScrollCounter < SCROLL_AMOUNT);
 
             //Get back to map screen
             robot.keyPress(VK_ESCAPE);
@@ -395,6 +381,118 @@ public class CoreMechanics {
             log.error(e.getMessage());
         }
     }
+
+    private void publishContentOnDiscord(WebClient discordWebClient, MultipartBodyBuilder discordRestbuilder) {
+        if (!generalConfig.isPostDryRun()) {
+            log.info("Publish on discord");
+            try {
+                discordWebClient.post().uri("/messages").body(BodyInserters.fromMultipartData(discordRestbuilder.build())).retrieve().bodyToMono(String.class).block();
+
+            } catch (WebClientException e) {
+                log.error("Error calling discord api: {}", e.getMessage());
+            }
+        }
+    }
+
+    private void proceedScrolling(int mainScrollCounter, boolean prevNotFound) throws InterruptedException {
+        if (prevNotFound) {
+            robot.mouseWheel(1);
+            Thread.sleep(generalConfig.getActionIntervalMs());
+        } else {
+            log.info("Scrolling {} times", mainScrollCounter);
+            for (int i = 0; i < mainScrollCounter; i++) {
+                robot.mouseWheel(1);
+                Thread.sleep(generalConfig.getActionIntervalMs());
+            }
+        }
+    }
+
+    public void receivedRss(WinUtils.WindowInfo windowInfo, WebClient discordWebClient) throws InterruptedException, IOException, AWTException, URISyntaxException, TesseractException {
+
+        try {
+            moveAndClick(mainMapButtonsCoordsMap.get(windowInfo.getTitle()).get(MainMapButtons.REPORTS));
+            Thread.sleep(generalConfig.getActionIntervalMs());
+
+            String repsPage = takeScreenCapture(windowInfo);
+            Mat repsPageMat = Imgcodecs.imread(repsPage, CONVERT_IMG_FLAG);
+
+            moveAndClick(findCoordsOnScreen(ReportViewButtons.MARCH_REPORTS_TAB_FR.getImgPath(), repsPageMat, windowInfo, false, generalConfig.getImageQualityLowerBound()));
+            Thread.sleep(generalConfig.getActionIntervalMs());
+
+            repsPage = takeScreenCapture(windowInfo);
+            repsPageMat = Imgcodecs.imread(repsPage, CONVERT_IMG_FLAG);
+
+            int mainScrollCounter = 0;
+            boolean prevNotFound = false;
+            do {
+
+                try {
+                    Double[] rssReceivedCoords = findCoordsOnScreen(ReportViewButtons.RSS_RECEIVED_FR.getImgPath(), repsPageMat, windowInfo, false, generalConfig.getImageQualityLowerBound());
+                    MultipartBodyBuilder discordRestbuilder = new MultipartBodyBuilder();
+                    //Get an image to collect donor
+
+                    //Do stuff
+                    WinUtils.RECT rect = new WinUtils.RECT();
+                    rect.top = rssReceivedCoords[1].intValue() -15;
+                    rect.bottom = rect.top + 50;
+                    rect.left = rssReceivedCoords[0].intValue() -60;
+                    rect.right = rect.left + 250;
+
+                    WinUtils.WindowInfo myCustomWindow = new WinUtils.WindowInfo(rect, "custom");
+
+                    String donationWithDonorCapturePath = takeScreenCapture(myCustomWindow);
+
+                    String donor = ScreenUtils.extractTextFromImage(donationWithDonorCapturePath, ocrEngine);
+                    String[] segs = donor.split("\n");
+
+                    StringBuffer contextText = new StringBuffer(segs[segs.length-1]);
+
+
+                    moveAndClick(rssReceivedCoords);
+                    Thread.sleep(generalConfig.getActionIntervalMs());
+
+                    String amountProvided = ScreenUtils.extractTextFromImage(takeScreenCapture(windowInfo), ocrEngine);
+                    segs = amountProvided.split("\n");
+                    contextText.append("\n" + segs[segs.length-1]);
+
+                    log.info("Text extracted: {}", contextText);
+                    discordRestbuilder.part("content", contextText.toString());
+
+
+
+                    robot.keyPress(VK_ESCAPE);
+                    robot.keyRelease(VK_ESCAPE);
+                    Thread.sleep(generalConfig.getActionIntervalMs());
+                    prevNotFound = false;
+
+                    publishContentOnDiscord(discordWebClient, discordRestbuilder);
+
+
+                } catch (ImageNotMatchedException imageNotMatchedException) {
+                    //continue
+                    prevNotFound = true;
+
+                }
+
+                mainScrollCounter++;
+                proceedScrolling(mainScrollCounter, prevNotFound);
+
+                repsPage = takeScreenCapture(windowInfo);
+                repsPageMat = Imgcodecs.imread(repsPage, CONVERT_IMG_FLAG);
+
+            }
+            while (mainScrollCounter < SCROLL_AMOUNT);
+
+            //Get back to map screen
+            robot.keyPress(VK_ESCAPE);
+            robot.keyRelease(VK_ESCAPE);
+            Thread.sleep(generalConfig.getActionIntervalMs());
+
+        } catch (ImageNotMatchedException e) {
+            log.error(e.getMessage());
+        }
+    }
+
 
     private void handleStartLocationScreen(WinUtils.WindowInfo windowInfo) throws AWTException, IOException, URISyntaxException, ImageNotMatchedException, InterruptedException {
         String locationSelectionPath = takeScreenCapture(windowInfo);
