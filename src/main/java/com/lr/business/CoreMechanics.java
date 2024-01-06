@@ -22,8 +22,10 @@ import java.awt.*;
 import java.awt.event.KeyEvent;
 import java.io.IOException;
 import java.net.URISyntaxException;
+import java.util.ArrayList;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.ConcurrentMap;
 
 import static com.lr.utils.ScreenUtils.findCoordsOnScreen;
@@ -36,6 +38,8 @@ import static org.opencv.imgcodecs.Imgcodecs.IMREAD_COLOR;
 @Slf4j
 public class CoreMechanics {
 
+    @Autowired
+    Random random;
 
     public static final int FAT_ARMY_THRESHOLD = 15;
     public static final int SCROLL_AMOUNT = 20;
@@ -98,6 +102,8 @@ public class CoreMechanics {
 
             searchViewPath = takeScreenCapture(windowInfo);
             searchScreen = Imgcodecs.imread(searchViewPath, CONVERT_IMG_FLAG);
+
+            rssLevel = handleRange(rssLevel);
 
             Double[] lvlChoice = findCoordsOnScreen(SearchViewButtons.SEARCH_LEVEL_EXPANDER.getLevelIconImgPath(rssLevel, generalConfig.getGameLanguage()), searchScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
             moveAndClick(lvlChoice);
@@ -196,6 +202,9 @@ public class CoreMechanics {
             searchViewPath = takeScreenCapture(windowInfo);
             searchScreen = Imgcodecs.imread(searchViewPath, CONVERT_IMG_FLAG);
 
+
+            armyLvl = handleRange(armyLvl);
+
             Double[] lvlChoice = findCoordsOnScreen(SearchViewButtons.SEARCH_LEVEL_EXPANDER.getLevelIconImgPath(armyLvl, generalConfig.getGameLanguage()), searchScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
             moveAndClick(lvlChoice);
 
@@ -230,20 +239,28 @@ public class CoreMechanics {
             armySelectionViewPath = takeScreenCapture(windowInfo);
             searchScreen = Imgcodecs.imread(armySelectionViewPath, CONVERT_IMG_FLAG);
 
-            Double[] launchPartyButton = findCoordsOnScreen(Locale.ENGLISH.equals(generalConfig.getGameLanguage()) ? ExpeditionViewButtons.LAUNCH_EXPEDITION_BUTTON_EN.getImgPath() : ExpeditionViewButtons.LAUNCH_EXPEDITION_BUTTON_FR.getImgPath(), searchScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
 
-            moveAndClick(launchPartyButton);
+            try {
 
-            if (!"ALL".equalsIgnoreCase(armyLvl) && Integer.parseInt(armyLvl) >= FAT_ARMY_THRESHOLD) {
-                armySelectionViewPath = takeScreenCapture(windowInfo);
-                searchScreen = Imgcodecs.imread(armySelectionViewPath, CONVERT_IMG_FLAG);
+                Double[] launchPartyButton = findCoordsOnScreen(Locale.ENGLISH.equals(generalConfig.getGameLanguage()) ? ExpeditionViewButtons.LAUNCH_EXPEDITION_BUTTON_EN.getImgPath() : ExpeditionViewButtons.LAUNCH_EXPEDITION_BUTTON_FR.getImgPath(), searchScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
 
-                Double[] launchPartyConfirmationButton = findCoordsOnScreen(Locale.ENGLISH.equals(generalConfig.getGameLanguage()) ? ExpeditionViewButtons.CONFIRM_ATTACK_BUTTON_EN.getImgPath() : ExpeditionViewButtons.CONFIRM_ATTACK_BUTTON_FR.getImgPath(), searchScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
+                moveAndClick(launchPartyButton);
+            } catch (ImageNotMatchedException e) {
 
-                moveAndClick(launchPartyConfirmationButton);
+                //Use case for big army warning
+                if (!"ALL".equalsIgnoreCase(armyLvl) && Integer.parseInt(armyLvl) >= FAT_ARMY_THRESHOLD) {
+                    armySelectionViewPath = takeScreenCapture(windowInfo);
+                    searchScreen = Imgcodecs.imread(armySelectionViewPath, CONVERT_IMG_FLAG);
+
+                    Double[] launchPartyConfirmationButton = findCoordsOnScreen(Locale.ENGLISH.equals(generalConfig.getGameLanguage()) ? ExpeditionViewButtons.CONFIRM_ATTACK_BUTTON_EN.getImgPath() : ExpeditionViewButtons.CONFIRM_ATTACK_BUTTON_FR.getImgPath(), searchScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
+
+                    moveAndClick(launchPartyConfirmationButton);
+                }
             }
 
         } catch (ImageNotMatchedException e) {
+
+
             log.error(e.getMessage());
             //Go back to main screen
             if (!e.getInMainMap()) {
@@ -255,6 +272,36 @@ public class CoreMechanics {
         Thread.sleep(generalConfig.getActionIntervalMs());
 
         log.info("Done with farmArmies");
+
+    }
+
+    private String handleRange(String nodeLvl) {
+
+        String randomArmyLevel = nodeLvl;
+
+        if (nodeLvl.contains(",")) {
+            String[] possibleValues = nodeLvl.split(",");
+            randomArmyLevel = possibleValues[random.nextInt(possibleValues.length)];
+        }
+
+        if (nodeLvl.contains("-")) {
+            String[] bounds = nodeLvl.split("-", 2);
+            int step = 1;
+
+            if (Integer.parseInt(bounds[0]) >= 10) {
+                step = 5;
+            }
+
+            java.util.List<String> possibleValues = new ArrayList<>(5);
+            for (int i = Integer.parseInt(bounds[0]); i <= Integer.parseInt(bounds[1]); i = i + step) {
+                possibleValues.add(Integer.toString(i));
+            }
+
+            randomArmyLevel = possibleValues.get(random.nextInt(possibleValues.size()));
+        }
+
+        log.info("Searching for army level {}", randomArmyLevel);
+        return randomArmyLevel;
 
     }
 
@@ -284,7 +331,7 @@ public class CoreMechanics {
             Thread.sleep(generalConfig.getActionIntervalMs());
 
             int mainScrollCounter = 0;
-            boolean prevNotFound = false;
+            boolean prevNotFound;
             do {
 
 
@@ -303,7 +350,7 @@ public class CoreMechanics {
                     int scrollCounter = 0;
                     discordRestbuilder.part("files[" + scrollCounter + "]", new FileSystemResource("tmp" + windowInfo.getTitle() + ".jpg"));
 
-                    StringBuffer contextText = new StringBuffer("Stats for challenge:\n");
+                    StringBuilder contextText = new StringBuilder("Stats for challenge:\n");
 
                     Mat challengeDetailsScreenCapture = Imgcodecs.imread(challengeDetailsScreenCapturePath, CONVERT_IMG_FLAG);
                     coords = findCoordsOnScreen(ChallengeViewButtons.PAST_CHALLENGE_CONTRIBS_BTTN_FR.getImgPath(), challengeDetailsScreenCapture, windowInfo, false, generalConfig.getImageQualityLowerBound());
@@ -423,7 +470,7 @@ public class CoreMechanics {
             repsPageMat = Imgcodecs.imread(repsPage, CONVERT_IMG_FLAG);
 
             int mainScrollCounter = 0;
-            boolean prevNotFound = false;
+            boolean prevNotFound;
             do {
 
                 try {
@@ -433,9 +480,9 @@ public class CoreMechanics {
 
                     //Do stuff
                     WinUtils.RECT rect = new WinUtils.RECT();
-                    rect.top = rssReceivedCoords[1].intValue() -15;
+                    rect.top = rssReceivedCoords[1].intValue() - 15;
                     rect.bottom = rect.top + 50;
-                    rect.left = rssReceivedCoords[0].intValue() -60;
+                    rect.left = rssReceivedCoords[0].intValue() - 60;
                     rect.right = rect.left + 250;
 
                     WinUtils.WindowInfo myCustomWindow = new WinUtils.WindowInfo(rect, "custom");
@@ -445,7 +492,7 @@ public class CoreMechanics {
                     String donor = ScreenUtils.extractTextFromImage(donationWithDonorCapturePath, ocrEngine);
                     String[] segs = donor.split("\n");
 
-                    StringBuffer contextText = new StringBuffer(segs[segs.length-1]);
+                    StringBuffer contextText = new StringBuffer(segs[segs.length - 1]);
 
 
                     moveAndClick(rssReceivedCoords);
@@ -453,11 +500,10 @@ public class CoreMechanics {
 
                     String amountProvided = ScreenUtils.extractTextFromImage(takeScreenCapture(windowInfo), ocrEngine);
                     segs = amountProvided.split("\n");
-                    contextText.append("\n" + segs[segs.length-1]);
+                    contextText.append("\n").append(segs[segs.length - 1]);
 
                     log.info("Text extracted: {}", contextText);
                     discordRestbuilder.part("content", contextText.toString());
-
 
 
                     robot.keyPress(VK_ESCAPE);
@@ -521,11 +567,6 @@ public class CoreMechanics {
         robot.mouseRelease(BUTTON1_DOWN_MASK);
         Thread.sleep(generalConfig.getActionIntervalMs());
 
-    }
-
-    private void scrollAndExtract() throws InterruptedException {
-        robot.mouseWheel(1);
-        Thread.sleep(generalConfig.getActionIntervalMs());
     }
 
 
