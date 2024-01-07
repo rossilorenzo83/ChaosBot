@@ -138,13 +138,10 @@ public class CoreMechanics {
             Mat armySelectionScreen = Imgcodecs.imread(armySelectionPath, CONVERT_IMG_FLAG);
 
             Double[] armyPresetCoords = findCoordsOnScreen(ExpeditionViewButtons.PRESET_ICON.getImgPath(), armySelectionScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
+            Double[] qtyLeftCoords = findCoordsOnScreen(ExpeditionViewButtons.RSS_LEFT.getImgPath(), armySelectionScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
 
-            try {
-                Double[] heroSliderCoords = findCoordsOnScreen(ExpeditionViewButtons.HERO_SLIDER.getImgPath(), armySelectionScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
-                moveAndClick(heroSliderCoords);
-            } catch (ImageNotMatchedException e) {
-                log.info("Hero not avail");
-            }
+
+            useHeroIfLowQtyNode(qtyLeftCoords, windowInfo, armySelectionScreen);
 
             moveAndClick(armyPresetCoords);
 
@@ -172,6 +169,28 @@ public class CoreMechanics {
 
         log.info("Done with findAndFarm");
 
+    }
+
+    private void useHeroIfLowQtyNode(Double[] coords, WinUtils.WindowInfo windowInfo, Mat armySelectionScreen) throws AWTException, IOException, URISyntaxException, InterruptedException {
+        try {
+            Rectangle rect = new Rectangle(coords[0].intValue() + 20, coords[1].intValue() - 20, 100, 40);
+            String qtyPath = takeScreenCapture(rect, "qtyExtract", "qty");
+            String extractedText = ScreenUtils.extractTextFromImage(qtyPath, ocrEngine);
+            log.info("Extracted Text: {}", extractedText);
+
+            String[] splitText = extractedText.trim().split("/");
+            String qtyAvail = splitText[1];
+
+            if (qtyAvail.matches("^[0-9]+$") || (qtyAvail.contains("k") && Double.parseDouble(qtyAvail.split("k")[0].replaceAll(",",".")) < 30)) {
+                Double[] heroSliderCoords = findCoordsOnScreen(ExpeditionViewButtons.HERO_SLIDER.getImgPath(), armySelectionScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
+                moveAndClick(heroSliderCoords);
+            }
+
+        } catch (ImageNotMatchedException e) {
+            log.info("Hero not avail");
+        } catch (TesseractException e) {
+            log.info("Could not extract qty left on node {}", e.getMessage());
+        }
     }
 
     public void armyFarming(String armyLvl, int armyPreset, WinUtils.WindowInfo windowInfo, boolean hasEncampment) throws IOException, AWTException, InterruptedException, URISyntaxException {

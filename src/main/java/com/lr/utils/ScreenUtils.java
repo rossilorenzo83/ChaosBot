@@ -27,7 +27,6 @@ import static org.opencv.imgproc.Imgproc.*;
 public class ScreenUtils {
 
 
-
     /**
      * Return a string containing the filePath of the captured image
      *
@@ -43,10 +42,13 @@ public class ScreenUtils {
     public static String takeScreenCapture(WinUtils.WindowInfo windowInfo, String postfix) throws AWTException, IOException {
         Rectangle screenRect = new Rectangle(windowInfo.rect.left, windowInfo.rect.top, Math.abs(windowInfo.rect.right
                 - windowInfo.rect.left), Math.abs(windowInfo.rect.bottom - windowInfo.rect.top));
+        return takeScreenCapture(screenRect, windowInfo.title, postfix);
+    }
 
-        BufferedImage capture = new Robot().createScreenCapture(screenRect);
-        String filePath = "tmp" + windowInfo.title + postfix + ".jpg";
-        ImageIO.write(capture, "jpg", new File(filePath ));
+    public static String takeScreenCapture(Rectangle rectangle, String winTitle, String postfix) throws AWTException, IOException {
+        BufferedImage capture = new Robot().createScreenCapture(rectangle);
+        String filePath = "tmp" + winTitle + postfix + ".jpg";
+        ImageIO.write(capture, "jpg", new File(filePath));
         return filePath;
     }
 
@@ -56,7 +58,7 @@ public class ScreenUtils {
 
 
             InputStream inputStream = new ClassPathResource(pathImgToFind).getInputStream();
-            File f = new File("targetFile-"+windowInfo.getTitle()+".PNG");
+            File f = new File("targetFile-" + windowInfo.getTitle() + ".PNG");
             java.nio.file.Files.copy(
                     inputStream,
                     f.toPath(),
@@ -91,13 +93,12 @@ public class ScreenUtils {
                 Double absXCoord = windowInfo.getRect().left + offsetX + toMatch.size().width / 2;
                 Double absYCoord = windowInfo.getRect().top + offsetY + toMatch.size().height / 2;
                 return new Double[]{absXCoord, absYCoord};
-            } else{
+            } else {
                 log.error("Insufficient confidence {} matching the provided template", mmr.maxVal);
                 throw new ImageNotMatchedException("Cannot find img: " + pathImgToFind, inMainMap);
             }
 
-        }
-        catch(CvException e){
+        } catch (CvException e) {
             throw new ImageNotMatchedException(e.getMessage(), inMainMap);
         }
 
@@ -110,28 +111,28 @@ public class ScreenUtils {
 
     private static Double computeScaleFactor(Mat originalImage) {
         //scale for height
-        Double scaleHeight = originalImage.height()/ GeneralConfig.SUPPORTED_IMG_HEIGHT;
+        Double scaleHeight = originalImage.height() / GeneralConfig.SUPPORTED_IMG_HEIGHT;
         //scale for width
-        Double scaleWidth = originalImage.width()/ GeneralConfig.SUPPORTED_IMG_WIDTH;
+        Double scaleWidth = originalImage.width() / GeneralConfig.SUPPORTED_IMG_WIDTH;
 
         return Math.max(scaleHeight, scaleWidth);
     }
 
 
-    private static Mat resizeImage(Mat originalImage, Double scaleFactor){
+    private static Mat resizeImage(Mat originalImage, Double scaleFactor) {
         Mat resizedImage = new Mat();
         log.info("Resizing with scale factor: {}", scaleFactor);
 
-        Size size = new Size(originalImage.width()*scaleFactor, originalImage.height()*scaleFactor);
+        Size size = new Size(originalImage.width() * scaleFactor, originalImage.height() * scaleFactor);
         resize(originalImage, resizedImage, size);
         return resizedImage;
     }
 
-    public static Boolean isSameImage(Mat image1, Mat image2){
+    public static Boolean isSameImage(Mat image1, Mat image2) {
 
         Mat difference = new Mat();
-        Mat grey1 =  new Mat();
-        Mat grey2 =  new Mat();
+        Mat grey1 = new Mat();
+        Mat grey2 = new Mat();
 
         cvtColor(image1, grey1, COLOR_BGR2GRAY);
         cvtColor(image2, grey2, COLOR_BGR2GRAY);
