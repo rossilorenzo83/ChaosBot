@@ -3,7 +3,7 @@
 
     <groupId>com.lr</groupId>
     <artifactId>chaos-conquest-bot</artifactId>
-    <version>0.0.1-beta</version>
+    <version>0.0.2-SNAPSHOT</version>
 
 
     <parent>
@@ -36,7 +36,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-release-plugin</artifactId>
-                <version>3.0.0-M5</version>
+                <version>3.0.0-M6</version>
             </plugin>
         </plugins>
     </build>
