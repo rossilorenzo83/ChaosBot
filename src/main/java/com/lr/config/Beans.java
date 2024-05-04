@@ -46,6 +46,7 @@ public class Beans {
         tesseract.setLanguage(generalConfig.getGameLanguage().getISO3Language());
         tesseract.setOcrEngineMode(3);
         tesseract.setPageSegMode(3);
+
         File tmpDataFolder = LoadLibs.extractTessResources("tessdata");
 
         //Add french vocabulary

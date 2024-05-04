@@ -1,5 +1,6 @@
 package com.lr.config;
 
+import com.lr.business.RssType;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -15,8 +16,9 @@ public class MarchConfig {
 
     private Integer marchesAvailable;
 
-    //Need to support ALL
     private String targetRssLevel;
+
+    private String rssType;
 
     private String targetArmyLevel;
 }

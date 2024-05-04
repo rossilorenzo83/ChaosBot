@@ -129,7 +129,7 @@ public class ChaosBot implements CommandLineRunner {
                     log.info("Exec started . . . ");
 
                     File tmpFolder = LoadLibs.extractTessResources("win32-x86-64");
-                    log.info("Tessaract tmp folder path:", tmpFolder.getPath());
+                    log.info("Tessaract tmp folder path: {}", tmpFolder.getPath());
                     System.setProperty("java.library.path", tmpFolder.getPath());
 
                     switch (generalConfig.getActionType()) {
@@ -152,7 +152,7 @@ public class ChaosBot implements CommandLineRunner {
 
                         case RSS_FARMING:
                         default:
-                            coreMechanics.findAndFarm(marchConfig.getTargetRssLevel(), RssType.values()[random.nextInt(RssType.values().length)], windowInfo, hasEncampments);
+                            coreMechanics.findAndFarm(marchConfig.getTargetRssLevel(), "ALL".equalsIgnoreCase(marchConfig.getRssType()) ? RssType.values()[random.nextInt(RssType.values().length)] : RssType.valueOf(marchConfig.getRssType()), windowInfo, hasEncampments);
                             break;
                     }
 
