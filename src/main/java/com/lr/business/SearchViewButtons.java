@@ -8,7 +8,6 @@ import java.util.Optional;
 
 @Slf4j
 public enum SearchViewButtons {
-
     SEARCH_EXPANDER("search_type_expander.PNG", Optional.empty(), Optional.empty(), Optional.empty()),
 
     SEARCH_LEVEL_EXPANDER("search_lvl_expander.PNG", Optional.empty(), Optional.empty(), Optional.empty()),
@@ -36,7 +35,7 @@ public enum SearchViewButtons {
 
     public String getLevelIconImgPath(String text, Locale locale) {
         log.info("Searching lvl icon for lvl: {} and locale: {}", text, locale);
-        return "ALL".equals(text)? "all_lvls_" + locale.getLanguage() + ".PNG" : "lvl_" + text + ".PNG";
+        return "ALL".equals(text) ? "all_lvls_" + locale.getLanguage() + ".PNG" : "lvl_" + text + ".PNG";
     }
 
     public String getOnMapIconPath() {
@@ -48,33 +47,24 @@ public enum SearchViewButtons {
     }
 
     public static SearchViewButtons getEnumFromRssType(RssType rssType) {
-        switch (rssType) {
-            case STONE:
-                return SearchViewButtons.STONE_ICON;
-            case LEAD:
-                return SearchViewButtons.LEAD_ICON;
-            case FOOD:
-                return SearchViewButtons.FOOD_ICON;
-            case IRON:
-                return SearchViewButtons.IRON_ICON;
-            case WOOD:
-            default:
-                return SearchViewButtons.WOOD_ICON;
-        }
+        return switch (rssType) {
+            case STONE -> SearchViewButtons.STONE_ICON;
+            case LEAD -> SearchViewButtons.LEAD_ICON;
+            case FOOD -> SearchViewButtons.FOOD_ICON;
+            case IRON -> SearchViewButtons.IRON_ICON;
+            default -> SearchViewButtons.WOOD_ICON;
+        };
     }
 
-    private String imgPath;
+    private final String imgPath;
     private RssType rssType;
     private String onMapIconPath;
     private String onMapCollectButtonPath;
 
     SearchViewButtons(String imgPath, Optional<RssType> rssType, Optional<String> onMapIconPath, Optional<String> onMapCollectButtonPath) {
         this.imgPath = imgPath;
-        if (rssType.isPresent())
-            this.rssType = rssType.get();
-        if (onMapIconPath.isPresent())
-            this.onMapIconPath = onMapIconPath.get();
-        if (onMapCollectButtonPath.isPresent())
-            this.onMapCollectButtonPath = onMapCollectButtonPath.get();
+        rssType.ifPresent(type -> this.rssType = type);
+        onMapIconPath.ifPresent(s -> this.onMapIconPath = s);
+        onMapCollectButtonPath.ifPresent(s -> this.onMapCollectButtonPath = s);
     }
 }

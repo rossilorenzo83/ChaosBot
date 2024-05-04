@@ -28,6 +28,10 @@ public class GeneralConfig {
     private Locale gameLanguage;
     private Long actionIntervalMs;
     private ActionType actionType;
+    private Double imageQualityLowerBound;
+
+    //Boolean to drive publishing on discord
+    private boolean postDryRun;
 
     public static Double SUPPORTED_IMG_WIDTH = 414D;
     public static Double SUPPORTED_IMG_HEIGHT = 763D;

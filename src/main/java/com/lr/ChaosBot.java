@@ -1,13 +1,12 @@
 package com.lr;
 
-import com.lr.business.CoreMechanics;
-import com.lr.business.ImageNotMatchedException;
-import com.lr.business.MainMapButtons;
-import com.lr.business.RssType;
+import com.lr.business.*;
 import com.lr.config.GeneralConfig;
 import com.lr.config.MarchConfig;
 import com.lr.utils.WinUtils;
 import lombok.extern.slf4j.Slf4j;
+import net.sourceforge.tess4j.TesseractException;
+import net.sourceforge.tess4j.util.LoadLibs;
 import org.opencv.core.Mat;
 import org.opencv.imgcodecs.Imgcodecs;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,14 +14,14 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.web.reactive.function.client.WebClient;
 
 import java.awt.*;
+import java.io.File;
 import java.io.IOException;
 import java.net.URISyntaxException;
-import java.util.HashMap;
+import java.util.*;
 import java.util.List;
-import java.util.Map;
-import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
@@ -49,6 +48,9 @@ public class ChaosBot implements CommandLineRunner {
     @Autowired
     MarchConfig marchConfig;
 
+    @Autowired
+    WebClient discordWebClient;
+
 
     public static void main(String[] args) {
         SpringApplication.run(ChaosBot.class, args);
@@ -60,21 +62,15 @@ public class ChaosBot implements CommandLineRunner {
         //Load dll from jar dep
         nu.pattern.OpenCV.loadLocally();
         List<Integer> pidsBS = WinUtils.findPidsMatching(generalConfig.getPidName());
-        log.info("PIDs matching config found:", pidsBS.size());
+        log.info("PIDs matching config found: {}", pidsBS.size());
         List<WinUtils.WindowInfo> hwndList = WinUtils.findAllWindowsMatching(pidsBS, generalConfig.getWindowsNames());
-        log.info("Windows matching config found:", hwndList.size());
+        log.info("Windows matching config found: {}", hwndList.size());
 
 
         try {
 
-            hwndList.stream().forEach(
-                    windowInfo -> {
-
-                        executorService.execute(() -> {
-                            mainLogic(windowInfo);
-
-                        });
-                    });
+            hwndList.forEach(
+                    windowInfo -> executorService.execute(() -> mainLogic(windowInfo)));
         } finally {
             executorService.shutdown();
         }
@@ -96,7 +92,7 @@ public class ChaosBot implements CommandLineRunner {
                 log.info("Searching coords for control:" + mainMapButton.name());
                 try {
 
-                    Double[] absCoords = findCoordsOnScreen(mainMapButton.getImgPath(), fullScreen, windowInfo, true);
+                    Double[] absCoords = findCoordsOnScreen(mainMapButton.getImgPath(), fullScreen, windowInfo, true, generalConfig.getImageQualityLowerBound());
                     currentWindowCoords.put(mainMapButton, absCoords);
 
                 } catch (ImageNotMatchedException e) {
@@ -122,7 +118,7 @@ public class ChaosBot implements CommandLineRunner {
 
                 // Search coords
 
-                if (availMarches == 0 && (System.currentTimeMillis() - timeLastActionPerformed) > (marchConfig.getMarchesIntervalMins() * 60 *1000)) {
+                if (availMarches == 0 && (System.currentTimeMillis() - timeLastActionPerformed) > (marchConfig.getMarchesIntervalMins() * 60 * 1000)) {
                     log.info("Timer expired");
                     availMarches = marchConfig.getMarchesAvailable();
                 }
@@ -132,15 +128,32 @@ public class ChaosBot implements CommandLineRunner {
 
                     log.info("Exec started . . . ");
 
+                    File tmpFolder = LoadLibs.extractTessResources("win32-x86-64");
+                    log.info("Tessaract tmp folder path: {}", tmpFolder.getPath());
+                    System.setProperty("java.library.path", tmpFolder.getPath());
+
                     switch (generalConfig.getActionType()) {
 
                         case ARMY_FARMING:
                             coreMechanics.armyFarming(marchConfig.getTargetArmyLevel(), availMarches, windowInfo, hasEncampments);
                             break;
 
+                        case CHALLENGE_STATS:
+
+                            List<ChallengeViewButtons> listChallengeViewButtons = Arrays.asList(new ChallengeViewButtons[]{ChallengeViewButtons.PAST_CHALLENGE_ALLIANCE_BANNER_FR, ChallengeViewButtons.PAST_CHALLENGE_HORDE_BANNER_FR, ChallengeViewButtons.PAST_CHALLENGE_LEGION_BANNER_FR});
+                            for (ChallengeViewButtons challengeViewButton : listChallengeViewButtons) {
+                                coreMechanics.challengeStats(windowInfo, discordWebClient, challengeViewButton);
+                            }
+                            break;
+
+                        case DONORS_STATS:
+                            coreMechanics.receivedRss(windowInfo, discordWebClient);
+                            break;
+
                         case RSS_FARMING:
-                        default: coreMechanics.findAndFarm(marchConfig.getTargetRssLevel(), RssType.values()[random.nextInt(RssType.values().length)], windowInfo, hasEncampments);
-                                 break;
+                        default:
+                            coreMechanics.findAndFarm(marchConfig.getTargetRssLevel(), "ALL".equalsIgnoreCase(marchConfig.getRssType()) ? RssType.values()[random.nextInt(RssType.values().length)] : RssType.valueOf(marchConfig.getRssType()), windowInfo, hasEncampments);
+                            break;
                     }
 
                     availMarches--;
@@ -148,10 +161,7 @@ public class ChaosBot implements CommandLineRunner {
                 }
             }
 
-
-        } catch (AWTException e) {
-            e.printStackTrace();
-        } catch (IOException | URISyntaxException | InterruptedException e) {
+        } catch (AWTException | IOException | URISyntaxException | InterruptedException | TesseractException e) {
             e.printStackTrace();
         }
     }
