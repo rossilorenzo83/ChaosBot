@@ -14,6 +14,7 @@ import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.http.client.MultipartBodyBuilder;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientException;
@@ -184,7 +185,7 @@ public class CoreMechanics {
             String qtyAvail = splitText.length > 1 ? splitText[1].trim() : "";
             log.info("Extracted residual qty: {}", qtyAvail);
 
-            if (qtyAvail.matches("^[0-9]+$") || (qtyAvail.contains("k") && Double.parseDouble(qtyAvail.split("k")[0].replaceAll(",",".")) < 30)) {
+            if (qtyAvail.matches("^[0-9]+$") || (qtyAvail.contains("k") && Double.parseDouble(extractSafelyNumberFromOCRString(qtyAvail).replaceAll(",",".")) < 30)) {
                 Double[] heroSliderCoords = findCoordsOnScreen(ExpeditionViewButtons.HERO_SLIDER.getImgPath(), armySelectionScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
                 moveAndClick(heroSliderCoords);
             }
@@ -194,6 +195,13 @@ public class CoreMechanics {
         } catch (TesseractException e) {
             log.info("Could not extract qty left on node {}", e.getMessage());
         }
+    }
+
+    private static String extractSafelyNumberFromOCRString(String qtyAvail) throws TesseractException{
+        String parsedQty = qtyAvail.split("k")[0];
+        if(parsedQty.matches("^[0-9]+$"))
+            return parsedQty;
+        else throw new TesseractException("Parsed qty isn't a number");
     }
 
     public void armyFarming(String armyLvl, int armyPreset, WinUtils.WindowInfo windowInfo, boolean hasEncampment) throws IOException, AWTException, InterruptedException, URISyntaxException {
