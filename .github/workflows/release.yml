@@ -1,4 +1,5 @@
-name: Wonder Release
+name: Maven Release & GitHub Deployment
+
 on:
   workflow_dispatch:
     inputs:
@@ -7,50 +8,81 @@ on:
         required: true
         default: "master"
       releaseVersion:
-        description: "Default version to use when preparing a release."
+        description: "Version to release."
         required: true
         default: "X.Y.Z"
       developmentVersion:
-        description: "Default version to use for new local working copy."
+        description: "Next development version."
         required: true
         default: "X.Y.Z-SNAPSHOT"
       dryRun:
-        description: "Dry run for release"
+        description: "Dry run for release? (true/false)"
         required: true
         default: "false"
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
-      - name: Checkout Wonder Source Code
-        uses: actions/checkout@v2
-        with:
-          ref: ${{ github.event.inputs.branch }}
+    - name: Checkout Source
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.inputs.branch }}
 
-      - name: Cache local Maven repository
-        uses: actions/cache@v2
-        with:
-          path: ~/.m2/repository
-          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-          restore-keys: |
-            ${{ runner.os }}-maven-
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: maven
 
-      - name: Set up JDK 1.8
-        uses: actions/setup-java@v1
-        with:
-          java-version: 1.8
+    - name: Set Git User
+      run: |
+        git config user.email "actions@github.com"
+        git config user.name "GitHub Actions"
 
-      - name: Configure Git User
-        run: |
-          git config user.email "actions@github.com"
-          git config user.name "GitHub Actions"
+    - name: Build with Maven (including tests)
+      run: mvn -B clean verify
 
-      - name: Cut Wonder Release
-        run: mvn release:prepare -DdryRun=${{ github.event.inputs.dryRun }} release:perform -B -s .maven_settings.xml -DreleaseVersion=${{ github.event.inputs.releaseVersion }} -DdevelopmentVersion=${{ github.event.inputs.developmentVersion }}
-        env:
-          CI_DEPLOY_USERNAME: ${{ secrets.CI_DEPLOY_USERNAME }}
-          CI_DEPLOY_PASSWORD: ${{ secrets.CI_DEPLOY_PASSWORD }}
-          GITHUB_ACTOR: ${{ github.actor }}
-          GITHUB_TOKEN: ${{ github.token }}
+    - name: Prepare Release with Maven
+      run: >
+        mvn -B release:prepare
+        -DreleaseVersion=${{ github.event.inputs.releaseVersion }}
+        -DdevelopmentVersion=${{ github.event.inputs.developmentVersion }}
+        -DdryRun=${{ github.event.inputs.dryRun }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Perform Release with Maven
+      if: ${{ github.event.inputs.dryRun != 'true' }}
+      run: mvn -B release:perform
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Create GitHub Release
+      if: ${{ github.event.inputs.dryRun != 'true' }}
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: "v${{ github.event.inputs.releaseVersion }}"
+        release_name: "Wonder ${{ github.event.inputs.releaseVersion }}"
+        draft: false
+        prerelease: false
+        body: |
+          Release ${{ github.event.inputs.releaseVersion }}
+
+    - name: Upload Release Asset
+      if: ${{ github.event.inputs.dryRun != 'true' }}
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./target/YOUR_EXECUTABLE.jar
+        asset_name: wonder-${{ github.event.inputs.releaseVersion }}.jar
+        asset_content_type: application/java-archive
