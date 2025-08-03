@@ -29,29 +29,33 @@ public class Beans {
         this.generalConfig = generalConfig;
     }
 
-    @Bean
-    public Robot sharedRobot() throws AWTException {
-        // Log environment variables for debugging
-        String display = System.getenv("DISPLAY");
-        String javaAwtHeadless = System.getProperty("java.awt.headless");
-        boolean isHeadless = GraphicsEnvironment.isHeadless();
-        
-        log.info("Environment check - DISPLAY: {}, java.awt.headless: {}, GraphicsEnvironment.isHeadless(): {}", 
-                display, javaAwtHeadless, isHeadless);
-        
-        if (isHeadless) {
-            log.info("Detected headless environment - creating stub Robot implementation");
-            return createStubRobot();
-        } else {
-            log.info("Detected GUI environment - creating real Robot with display support");
-            try {
-                return new Robot();
-            } catch (AWTException e) {
-                log.error("Failed to create Robot in GUI environment: {}", e.getMessage());
-                throw e;
-            }
-        }
-    }
+                    @Bean
+                public Robot sharedRobot() throws AWTException {
+                    // Log environment variables for debugging
+                    String display = System.getenv("DISPLAY");
+                    String javaAwtHeadless = System.getProperty("java.awt.headless");
+                    boolean isHeadless = GraphicsEnvironment.isHeadless();
+                    
+                    log.info("Environment check - DISPLAY: {}, java.awt.headless: {}, GraphicsEnvironment.isHeadless(): {}", 
+                            display, javaAwtHeadless, isHeadless);
+                    
+                    // Check the java.awt.headless property first (this is what we can control)
+                    if ("true".equals(javaAwtHeadless)) {
+                        log.info("Detected headless environment via java.awt.headless=true - creating stub Robot implementation");
+                        return createStubRobot();
+                    } else if (isHeadless) {
+                        log.info("Detected headless environment via GraphicsEnvironment.isHeadless() - creating stub Robot implementation");
+                        return createStubRobot();
+                    } else {
+                        log.info("Detected GUI environment - creating real Robot with display support");
+                        try {
+                            return new Robot();
+                        } catch (AWTException e) {
+                            log.error("Failed to create Robot in GUI environment: {}", e.getMessage());
+                            throw e;
+                        }
+                    }
+                }
     
     /**
      * Creates a stub Robot implementation for headless environments.

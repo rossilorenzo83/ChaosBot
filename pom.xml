@@ -5,6 +5,15 @@
     <artifactId>chaos-conquest-bot</artifactId>
     <version>0.0.2-SNAPSHOT</version>
 
+    <properties>
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- Default to GUI mode for local development -->
+        <surefire.argLine>-Djava.awt.headless=false</surefire.argLine>
+        <failsafe.argLine>-Djava.awt.headless=false</failsafe.argLine>
+    </properties>
+
 
     <parent>
         <groupId>org.springframework.boot</groupId>
@@ -45,7 +54,7 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.2.5</version>
                 <configuration>
-                    <argLine>-Djava.awt.headless=true</argLine>
+                    <argLine>${surefire.argLine}</argLine>
                     <includes>
                         <include>**/*Test.java</include>
                         <include>**/*Tests.java</include>
@@ -62,7 +71,7 @@
                 <artifactId>maven-failsafe-plugin</artifactId>
                 <version>3.2.5</version>
                 <configuration>
-                    <argLine>-Djava.awt.headless=true</argLine>
+                    <argLine>${failsafe.argLine}</argLine>
                     <includes>
                         <include>**/*IT.java</include>
                         <include>**/*IntegrationTest.java</include>
