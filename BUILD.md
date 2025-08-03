@@ -265,6 +265,34 @@ mvn test -Dtest=NewFeatureTest
 mvn clean verify
 ```
 
+### Comprehensive Test Coverage
+
+The project now includes comprehensive test coverage with the following test types:
+
+#### **Unit Tests**
+- **CoreMechanicsUnitTest**: Business logic with proper mocking
+- **UtilsUnitTest**: Utility functions and edge cases
+- **Configuration Tests**: Property binding and validation
+
+#### **Integration Tests**
+- **ChaosBotIntegrationTest**: Basic Spring Boot integration
+- **ChaosBotFullIntegrationTest**: Complete application context
+- **ConfigurationIntegrationTest**: Configuration bean loading
+
+#### **Test Coverage Areas**
+- ✅ **Business Logic**: Core automation methods and enums
+- ✅ **Configuration**: Property binding and validation
+- ✅ **Utilities**: Screen capture, window management, OCR
+- ✅ **Spring Boot**: Application context and dependency injection
+- ✅ **Discord Integration**: WebClient configuration
+- ✅ **Image Processing**: Template matching and quality thresholds
+- ✅ **Error Handling**: Exception scenarios and edge cases
+
+#### **Test Data**
+- **Test Resources**: Sample screenshots and mock images
+- **Test Configurations**: Alternative property files
+- **Test Documentation**: Comprehensive test data guidelines
+
 ## Build Configuration Files
 
 ### pom.xml Key Sections
