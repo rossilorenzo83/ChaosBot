@@ -31,7 +31,30 @@ public class Beans {
 
     @Bean
     public Robot sharedRobot() throws AWTException {
-        return new Robot();
+        try {
+            // Check if we're in a headless environment
+            if (GraphicsEnvironment.isHeadless()) {
+                log.warn("Running in headless environment - Robot functionality will be limited");
+                // Return a mock robot for headless environments
+                return createMockRobot();
+            }
+            return new Robot();
+        } catch (AWTException | HeadlessException e) {
+            log.warn("Failed to create Robot in headless environment: {}", e.getMessage());
+            return createMockRobot();
+        }
+    }
+
+    private Robot createMockRobot() {
+        // Create a mock robot that doesn't require a display
+        try {
+            // Set headless mode for AWT
+            System.setProperty("java.awt.headless", "true");
+            return new Robot();
+        } catch (AWTException e) {
+            log.error("Failed to create mock Robot: {}", e.getMessage());
+            throw new RuntimeException("Cannot create Robot in headless environment", e);
+        }
     }
 
     @Bean

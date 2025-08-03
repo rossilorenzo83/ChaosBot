@@ -52,11 +52,15 @@ jobs:
         MAVEN_OPTS: -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN
         # Skip Windows-specific tests on Linux runners
         SKIP_WINDOWS_TESTS: true
+        # Headless environment for CI/CD
+        JAVA_AWT_HEADLESS: true
 
     - name: Run Integration Tests
       run: mvn -B verify -DskipUnitTests
       env:
         MAVEN_OPTS: -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN
+        # Headless environment for CI/CD
+        JAVA_AWT_HEADLESS: true
 
     - name: Build Package
       run: mvn -B package -DskipTests
