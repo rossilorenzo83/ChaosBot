@@ -39,8 +39,12 @@ public class Beans {
                     log.info("Environment check - DISPLAY: {}, java.awt.headless: {}, GraphicsEnvironment.isHeadless(): {}", 
                             display, javaAwtHeadless, isHeadless);
                     
-                    // Check the java.awt.headless property first (this is what we can control)
-                    if ("true".equals(javaAwtHeadless)) {
+                    // Use DISPLAY variable as primary criterion for headless detection
+                    // This is the most reliable indicator across different environments
+                    if (display == null || display.isEmpty()) {
+                        log.info("Detected headless environment via DISPLAY=null/empty - creating stub Robot implementation");
+                        return createStubRobot();
+                    } else if ("true".equals(javaAwtHeadless)) {
                         log.info("Detected headless environment via java.awt.headless=true - creating stub Robot implementation");
                         return createStubRobot();
                     } else if (isHeadless) {
