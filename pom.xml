@@ -121,6 +121,28 @@
                 </configuration>
             </plugin>
 
+            <!-- Security Analysis Plugin -->
+            <plugin>
+                <groupId>org.owasp</groupId>
+                <artifactId>dependency-check-maven</artifactId>
+                <version>7.4.4</version>
+                <configuration>
+                    <failOnCVSS>7</failOnCVSS>
+                    <formats>
+                        <format>HTML</format>
+                        <format>JSON</format>
+                    </formats>
+                    <prettyPrint>true</prettyPrint>
+                    <!-- Performance optimizations -->
+                    <dataDirectory>~/.dependency-check/data</dataDirectory>
+                    <connectionTimeout>60000</connectionTimeout>
+                    <readTimeout>60000</readTimeout>
+                    <!-- Skip scopes that are less critical for security -->
+                    <skipProvidedScope>true</skipProvidedScope>
+                    <skipRuntimeScope>true</skipRuntimeScope>
+                </configuration>
+            </plugin>
+
         </plugins>
     </build>
 

@@ -124,8 +124,28 @@ jobs:
         distribution: 'temurin'
         cache: maven
 
+    - name: Cache OWASP Dependency Check Database
+      uses: actions/cache@v3
+      with:
+        path: ~/.dependency-check/data
+        key: ${{ runner.os }}-dependency-check-${{ hashFiles('**/pom.xml') }}
+        restore-keys: ${{ runner.os }}-dependency-check-
+
     - name: Run OWASP Dependency Check
       run: mvn -B org.owasp:dependency-check-maven:check
+      env:
+        # NVD API Key for faster vulnerability database updates
+        # Get a free API key from: https://nvd.nist.gov/developers/request-an-api-key
+        NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+
+    - name: Upload Security Report
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: security-report
+        path: |
+          target/dependency-check-report.html
+          target/dependency-check-report.json
 
     # Optional: Uploads the full dependency graph to GitHub to improve the quality of Dependabot alerts this repository can receive
     - name: Update dependency graph
