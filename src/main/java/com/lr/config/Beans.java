@@ -9,6 +9,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
 
 import java.awt.*;
+import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.StandardCopyOption;
@@ -67,16 +68,76 @@ public class Beans {
      */
     private Robot createStubRobot() throws AWTException {
         log.info("Creating stub Robot for headless environment");
-        // In headless environments, we need to set the headless property before creating Robot
-        System.setProperty("java.awt.headless", "true");
         
-        try {
-            // Now try to create a real Robot with headless mode enabled
-            return new Robot();
-        } catch (AWTException e) {
-            log.error("Failed to create Robot even with headless mode: {}. This is unexpected.", e.getMessage());
-            throw new RuntimeException("Cannot create Robot bean in headless environment - this should not happen with proper headless configuration", e);
-        }
+        // Create a stub Robot that doesn't require a display
+        // This is a minimal implementation that satisfies the Robot interface
+        return new Robot() {
+            @Override
+            public void mouseMove(int x, int y) {
+                log.debug("Stub Robot: mouseMove({}, {})", x, y);
+                // No-op in headless environment
+            }
+            
+            @Override
+            public void mousePress(int buttons) {
+                log.debug("Stub Robot: mousePress({})", buttons);
+                // No-op in headless environment
+            }
+            
+            @Override
+            public void mouseRelease(int buttons) {
+                log.debug("Stub Robot: mouseRelease({})", buttons);
+                // No-op in headless environment
+            }
+            
+            @Override
+            public void keyPress(int keycode) {
+                log.debug("Stub Robot: keyPress({})", keycode);
+                // No-op in headless environment
+            }
+            
+            @Override
+            public void keyRelease(int keycode) {
+                log.debug("Stub Robot: keyRelease({})", keycode);
+                // No-op in headless environment
+            }
+            
+            @Override
+            public BufferedImage createScreenCapture(Rectangle screenRect) {
+                log.debug("Stub Robot: createScreenCapture({})", screenRect);
+                // Return a blank image in headless environment
+                return new BufferedImage(screenRect.width, screenRect.height, BufferedImage.TYPE_INT_RGB);
+            }
+            
+            @Override
+            public Color getPixelColor(int x, int y) {
+                log.debug("Stub Robot: getPixelColor({}, {})", x, y);
+                // Return black color in headless environment
+                return Color.BLACK;
+            }
+            
+            @Override
+            public void setAutoDelay(int ms) {
+                log.debug("Stub Robot: setAutoDelay({})", ms);
+                // No-op in headless environment
+            }
+            
+            @Override
+            public void setAutoWaitForIdle(boolean isOn) {
+                log.debug("Stub Robot: setAutoWaitForIdle({})", isOn);
+                // No-op in headless environment
+            }
+            
+            @Override
+            public int getAutoDelay() {
+                return 0; // Default delay
+            }
+            
+            @Override
+            public boolean isAutoWaitForIdle() {
+                return false; // Default value
+            }
+        };
     }
 
     @Bean
