@@ -46,7 +46,7 @@ jobs:
       run: mvn -B compile
 
     - name: Run Unit Tests
-      run: mvn -B test -Dtest="!*UtilsUnitTest*" -DfailIfNoTests=false -DargLine="-Djava.awt.headless=true"
+      run: mvn -B test -Dtest="!*UtilsUnitTest*" -DfailIfNoTests=false
       env:
         # Enable test reporting and handle platform-specific tests
         MAVEN_OPTS: -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN -Djava.awt.headless=true
@@ -56,7 +56,7 @@ jobs:
         JAVA_AWT_HEADLESS: true
 
     - name: Run Integration Tests
-      run: mvn -B verify -DskipUnitTests -DargLine="-Djava.awt.headless=true"
+      run: mvn -B verify -DskipUnitTests
       env:
         MAVEN_OPTS: -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN -Djava.awt.headless=true
         # Headless environment for CI/CD
