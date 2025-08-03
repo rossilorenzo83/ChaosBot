@@ -2,8 +2,7 @@ package com.lr.utils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.junit.jupiter.SpringExtension;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -11,8 +10,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * Unit tests for ScreenUtils utility class.
  * Following TDD principles - tests are written before implementation.
  */
-@ExtendWith(SpringExtension.class)
-@SpringBootTest
+@ExtendWith(MockitoExtension.class)
 class ScreenUtilsTest {
 
     @Test
