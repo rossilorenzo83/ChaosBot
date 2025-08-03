@@ -1,22 +1,31 @@
 package com.lr.config;
 
+import com.lr.config.RobotIntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.awt.Robot;
+import java.awt.Rectangle;
+import java.awt.image.BufferedImage;
+
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Integration tests for configuration classes.
  * Tests Spring Boot configuration loading and bean initialization.
+ * Uses hybrid approach: real Robot testing when available, graceful skipping when not.
  */
 @ExtendWith(SpringExtension.class)
 @SpringBootTest
 @ActiveProfiles("test")
+@Import(TestConfig.class)
 class ConfigurationIntegrationTest {
 
     @Autowired
@@ -27,6 +36,9 @@ class ConfigurationIntegrationTest {
 
     @Autowired
     private WebClient discordWebClient;
+
+    @Autowired
+    private Robot robot;
 
     @Test
     void shouldLoadGeneralConfig() {
@@ -56,6 +68,41 @@ class ConfigurationIntegrationTest {
     void shouldLoadDiscordWebClient() {
         // Test that Discord WebClient is properly configured
         assertNotNull(discordWebClient, "Discord WebClient should be loaded");
+    }
+
+    @Test
+    void shouldTestRobotBeanWhenAvailable() {
+        // Test Robot bean functionality when real Robot is available
+        assumeTrue(RobotIntegrationTest.isRealRobotAvailable(robot), 
+            "Skipping Robot bean test - no display available or using mock Robot");
+        
+        try {
+            // Test that Robot bean is functional
+            Rectangle screenRect = new Rectangle(0, 0, 50, 50);
+            BufferedImage screenshot = robot.createScreenCapture(screenRect);
+            
+            assertNotNull(screenshot, "Robot screen capture should work");
+            assertEquals(50, screenshot.getWidth(), "Screen capture should have correct width");
+            assertEquals(50, screenshot.getHeight(), "Screen capture should have correct height");
+            
+        } catch (Exception e) {
+            fail("Robot bean should be functional with real Robot: " + e.getMessage());
+        }
+    }
+
+    @Test
+    void shouldHandleRobotConfiguration() {
+        // This test works with both real and mock Robot
+        try {
+            robot.setAutoDelay(50);
+            robot.setAutoWaitForIdle(false);
+            
+            // Just verify the methods don't throw exceptions
+            assertNotNull(robot, "Robot should be available");
+            
+        } catch (Exception e) {
+            fail("Robot configuration methods should not throw exceptions: " + e.getMessage());
+        }
     }
 
     @Test

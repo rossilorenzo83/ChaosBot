@@ -4,23 +4,32 @@ import com.lr.business.ActionType;
 import com.lr.business.RssType;
 import com.lr.config.GeneralConfig;
 import com.lr.config.MarchConfig;
+import com.lr.config.RobotIntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.awt.Robot;
+import java.awt.Rectangle;
+import java.awt.image.BufferedImage;
+
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Full integration tests for ChaosBot application.
  * Tests complete application context and component interactions.
+ * Uses hybrid approach: real Robot testing when available, graceful skipping when not.
  */
 @ExtendWith(SpringExtension.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
+@Import(com.lr.config.TestConfig.class)
 class ChaosBotFullIntegrationTest {
 
     @Autowired
@@ -31,6 +40,9 @@ class ChaosBotFullIntegrationTest {
 
     @Autowired
     private WebClient discordWebClient;
+
+    @Autowired
+    private Robot robot;
 
     @Test
     void shouldStartCompleteApplicationContext() {
@@ -44,6 +56,50 @@ class ChaosBotFullIntegrationTest {
         assertNotNull(generalConfig, "GeneralConfig should be loaded");
         assertNotNull(marchConfig, "MarchConfig should be loaded");
         assertNotNull(discordWebClient, "Discord WebClient should be loaded");
+        assertNotNull(robot, "Robot should be loaded");
+    }
+
+    @Test
+    void shouldTestRobotAutomationWhenAvailable() {
+        // Test Robot automation functionality when real Robot is available
+        assumeTrue(RobotIntegrationTest.isRealRobotAvailable(robot), 
+            "Skipping Robot automation test - no display available or using mock Robot");
+        
+        try {
+            // Test basic Robot automation capabilities
+            robot.setAutoDelay(100);
+            robot.setAutoWaitForIdle(true);
+            
+            // Test screen capture for automation
+            Rectangle screenRect = new Rectangle(0, 0, 200, 200);
+            BufferedImage screenshot = robot.createScreenCapture(screenRect);
+            
+            assertNotNull(screenshot, "Robot automation screen capture should work");
+            assertEquals(200, screenshot.getWidth(), "Screen capture should have correct width");
+            assertEquals(200, screenshot.getHeight(), "Screen capture should have correct height");
+            
+            // Test pixel color detection for automation
+            var pixelColor = robot.getPixelColor(100, 100);
+            assertNotNull(pixelColor, "Robot pixel color detection should work");
+            
+        } catch (Exception e) {
+            fail("Robot automation should work with real Robot: " + e.getMessage());
+        }
+    }
+
+    @Test
+    void shouldHandleRobotConfiguration() {
+        // This test works with both real and mock Robot
+        try {
+            robot.setAutoDelay(75);
+            robot.setAutoWaitForIdle(false);
+            
+            // Just verify the methods don't throw exceptions
+            assertNotNull(robot, "Robot should be available");
+            
+        } catch (Exception e) {
+            fail("Robot configuration methods should not throw exceptions: " + e.getMessage());
+        }
     }
 
     @Test
@@ -123,6 +179,7 @@ class ChaosBotFullIntegrationTest {
         assertNotNull(generalConfig, "Dependency injection should work for GeneralConfig");
         assertNotNull(marchConfig, "Dependency injection should work for MarchConfig");
         assertNotNull(discordWebClient, "Dependency injection should work for WebClient");
+        assertNotNull(robot, "Dependency injection should work for Robot");
     }
 
     @Test

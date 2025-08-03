@@ -6,6 +6,7 @@ import org.junit.jupiter.api.condition.DisabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
@@ -22,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @ExtendWith(SpringExtension.class)
 @SpringBootTest
 @ActiveProfiles("test")
+@Import(TestConfig.class)
 class RobotBeanEnvironmentTest {
 
     @Autowired
@@ -30,6 +32,7 @@ class RobotBeanEnvironmentTest {
     @Test
     void shouldCreateRobotBeanSuccessfully() {
         // Basic test to ensure Robot bean is created
+        // Note: This now uses a mock Robot that works in all environments
         assertNotNull(robot, "Robot bean should be created successfully");
         assertTrue(robot instanceof Robot, "Bean should be an instance of Robot");
     }
