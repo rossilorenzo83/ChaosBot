@@ -14,9 +14,26 @@ ChaosBot is an advanced automation tool designed specifically for the **Chaos Co
   - 🪵 **Wood** - Construction resources
   - ⛓️ **Iron** - Military equipment
   - 🎯 **Lead** - Strategic materials
+  - 💎 **Warpstone** - Advanced magical resources (requires custom scrolling logic)
 - **Smart Level Targeting**: Configurable resource level selection (6-35)
 - **Random Resource Selection**: Can cycle through different resource types automatically
 - **Efficient Pathfinding**: Optimizes march routes to resource locations
+- **Custom Scrolling Logic**: Special handling for warpstone resources that require scrolling to find in the resource list
+
+### **1.1. Warpstone Gathering (Special Feature)**
+- **Advanced Resource Type**: Warpstone is a special magical resource requiring unique handling
+- **Custom Scrolling Implementation**: 
+  - Automatically scrolls through resource list to locate warpstone icon
+  - Smart scrolling with maximum 5 scroll attempts to prevent infinite loops
+  - Real-time screen capture and image recognition during scrolling
+- **Screen Limitation Handling**: Addresses UI limitations where warpstone is not immediately visible
+- **Intelligent Error Recovery**: Graceful handling when warpstone cannot be found after maximum scrolls
+- **Seamless Integration**: Works within existing RSS_FARMING framework without additional action types
+- **Configuration Support**: 
+  ```properties
+  farm.rssType=WARPSTONE
+  farm.targetRssLevel=ALL
+  ```
 
 ### **2. Army Farming (ARMY_FARMING)**
 - **Automated Army Training**: Trains armies automatically using available marches
@@ -92,7 +109,7 @@ farm.marchesIntervalMins = 15
 # Targeting Settings
 farm.targetArmyLevel = 8
 farm.targetRssLevel = ALL
-farm.rssType = IRON
+farm.rssType = IRON  # Supported: IRON, STONE, FOOD, LEAD, WOOD, WARPSTONE
 ```
 
 ### **Supported Action Types**
@@ -181,7 +198,7 @@ farm.rssType = IRON
 
 ---
 
-**Last Updated**: December 2024  
+**Last Updated**: August 2025  
 **Version**: 0.0.2-SNAPSHOT  
 **Compatibility**: Chaos Conquest Game  
 **Supported Platforms**: Windows (BlueStacks, Steam) 
