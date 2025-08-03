@@ -62,9 +62,10 @@ class UtilsUnitTest {
     void shouldHandleNullProcessName() {
         // Test handling of null process name - Windows only
         try {
-            assertThrows(NullPointerException.class, () -> {
-                WinUtils.findPidsMatching(null);
-            }, "Should throw NullPointerException when process name is null");
+            List<Integer> result = WinUtils.findPidsMatching(null);
+            // On Windows, this should return an empty list instead of throwing NPE
+            assertNotNull(result, "Result should not be null");
+            assertTrue(result.isEmpty(), "Result should be empty list for null process name");
         } catch (UnsatisfiedLinkError e) {
             // Expected on non-Windows platforms
             assertTrue(true, "Native library not available on this platform");
