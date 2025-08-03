@@ -61,9 +61,6 @@ jobs:
     - name: Build Package
       run: mvn -B package -DskipTests
 
-    - name: Test Package
-      run: mvn -B spring-boot:repackage
-
     - name: Upload Test Results
       uses: actions/upload-artifact@v4
       if: always()
