@@ -6,7 +6,7 @@ on:
       branch:
         description: "The branch to checkout when cutting the release."
         required: true
-        default: ${{ github.event.repository.default_branch }}
+        default: "main"  # Can be overridden via environment variable or repository settings
       releaseVersion:
         description: "Version to release (e.g., 0.0.2)."
         required: true
@@ -26,12 +26,25 @@ jobs:
     permissions:
       contents: write
       packages: write
+    env:
+      # Can be overridden via repository secrets or environment variables
+      DEFAULT_BRANCH: ${{ vars.DEFAULT_BRANCH || 'main' }}
 
     steps:
+    - name: Get Default Branch
+      id: get_default_branch
+      run: |
+        # Try to get the default branch from GitHub API
+        DEFAULT_BRANCH=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          "https://api.github.com/repos/${{ github.repository }}" | \
+          jq -r '.default_branch // "main"')
+        echo "default_branch=$DEFAULT_BRANCH" >> $GITHUB_OUTPUT
+        echo "Using default branch: $DEFAULT_BRANCH"
+
     - name: Checkout Source
       uses: actions/checkout@v4
       with:
-        ref: ${{ github.event.inputs.branch }}
+        ref: ${{ github.event.inputs.branch || steps.get_default_branch.outputs.default_branch }}
         fetch-depth: 0
 
     - name: Set up JDK 21
