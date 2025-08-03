@@ -18,7 +18,6 @@ import static org.mockito.ArgumentMatchers.anyInt;
  * This allows tests to run with real Robot when display is available, or mock Robot when not.
  */
 @TestConfiguration
-@Profile("test")
 public class TestConfig {
 
     private final Environment environment;
