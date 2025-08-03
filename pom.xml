@@ -125,7 +125,7 @@
             <plugin>
                 <groupId>org.owasp</groupId>
                 <artifactId>dependency-check-maven</artifactId>
-                <version>7.4.4</version>
+                <version>7.1.2</version>
                 <configuration>
                     <failOnCVSS>7</failOnCVSS>
                     <formats>
@@ -140,53 +140,38 @@
                     <!-- Skip scopes that are less critical for security -->
                     <skipProvidedScope>true</skipProvidedScope>
                     <skipRuntimeScope>true</skipRuntimeScope>
-                    <!-- Skip irrelevant analyzers for Java project -->
-                    <analyzers>
-                        <assemblyAnalyzerEnabled>false</assemblyAnalyzerEnabled>
-                        <dotnetAnalyzerEnabled>false</dotnetAnalyzerEnabled>
-                        <nodeAnalyzerEnabled>false</nodeAnalyzerEnabled>
-                        <pythonAnalyzerEnabled>false</pythonAnalyzerEnabled>
-                        <rubyAnalyzerEnabled>false</rubyAnalyzerEnabled>
-                        <phpAnalyzerEnabled>false</phpAnalyzerEnabled>
-                        <cocoaAnalyzerEnabled>false</cocoaAnalyzerEnabled>
-                        <swiftAnalyzerEnabled>false</swiftAnalyzerEnabled>
-                        <autoconfAnalyzerEnabled>false</autoconfAnalyzerEnabled>
-                        <cmakeAnalyzerEnabled>false</cmakeAnalyzerEnabled>
-                        <opensslAnalyzerEnabled>false</opensslAnalyzerEnabled>
-                        <nuspecAnalyzerEnabled>false</nuspecAnalyzerEnabled>
-                        <composerAnalyzerEnabled>false</composerAnalyzerEnabled>
-                        <bundleAuditAnalyzerEnabled>false</bundleAuditAnalyzerEnabled>
-                        <retireJsAnalyzerEnabled>false</retireJsAnalyzerEnabled>
-                        <pnpmAuditAnalyzerEnabled>false</pnpmAuditAnalyzerEnabled>
-                        <yarnAuditAnalyzerEnabled>false</yarnAuditAnalyzerEnabled>
-                        <npmAuditAnalyzerEnabled>false</npmAuditAnalyzerEnabled>
-                        <nugetAnalyzerEnabled>false</nugetAnalyzerEnabled>
-                        <centralAnalyzerEnabled>true</centralAnalyzerEnabled>
-                        <nexusAnalyzerEnabled>false</nexusAnalyzerEnabled>
-                        <artifactoryAnalyzerEnabled>false</artifactoryAnalyzerEnabled>
-                        <jarAnalyzerEnabled>true</jarAnalyzerEnabled>
-                        <archiveAnalyzerEnabled>true</archiveAnalyzerEnabled>
-                        <msbuildProjectAnalyzerEnabled>false</msbuildProjectAnalyzerEnabled>
-                        <pomAnalyzerEnabled>true</pomAnalyzerEnabled>
-                        <gradleAnalyzerEnabled>false</gradleAnalyzerEnabled>
-                        <pipAnalyzerEnabled>false</pipAnalyzerEnabled>
-                        <pipfileAnalyzerEnabled>false</pipfileAnalyzerEnabled>
-                        <poetryAnalyzerEnabled>false</poetryAnalyzerEnabled>
-                        <cpanfileAnalyzerEnabled>false</cpanfileAnalyzerEnabled>
-                        <cpeAnalyzerEnabled>true</cpeAnalyzerEnabled>
-                        <cpeSuppressionAnalyzerEnabled>true</cpeSuppressionAnalyzerEnabled>
-                        <falsePositiveAnalyzerEnabled>true</falsePositiveAnalyzerEnabled>
-                        <hintAnalyzerEnabled>true</hintAnalyzerEnabled>
-                        <vulnerabilitySuppressionAnalyzerEnabled>true</vulnerabilitySuppressionAnalyzerEnabled>
-                        <versionFilterAnalyzerEnabled>true</versionFilterAnalyzerEnabled>
-                        <cweAnalyzerEnabled>true</cweAnalyzerEnabled>
-                        <dependencyBundlingAnalyzerEnabled>true</dependencyBundlingAnalyzerEnabled>
-                        <mavenInstallAnalyzerEnabled>false</mavenInstallAnalyzerEnabled>
-                        <mavenDepShieldAnalyzerEnabled>false</mavenDepShieldAnalyzerEnabled>
-                        <ossIndexAnalyzerEnabled>false</ossIndexAnalyzerEnabled>
-                        <knownExploitedVulnerabilityAnalyzerEnabled>true</knownExploitedVulnerabilityAnalyzerEnabled>
-                        <snykAnalyzerEnabled>false</snykAnalyzerEnabled>
-                    </analyzers>
+                    <!-- Explicitly disable problematic analyzers -->
+                    <assemblyAnalyzerEnabled>false</assemblyAnalyzerEnabled>
+                    <dotnetAnalyzerEnabled>false</dotnetAnalyzerEnabled>
+                    <nodeAnalyzerEnabled>false</nodeAnalyzerEnabled>
+                    <pythonAnalyzerEnabled>false</pythonAnalyzerEnabled>
+                    <rubyAnalyzerEnabled>false</rubyAnalyzerEnabled>
+                    <phpAnalyzerEnabled>false</phpAnalyzerEnabled>
+                    <cocoaAnalyzerEnabled>false</cocoaAnalyzerEnabled>
+                    <swiftAnalyzerEnabled>false</swiftAnalyzerEnabled>
+                    <autoconfAnalyzerEnabled>false</autoconfAnalyzerEnabled>
+                    <cmakeAnalyzerEnabled>false</cmakeAnalyzerEnabled>
+                    <opensslAnalyzerEnabled>false</opensslAnalyzerEnabled>
+                    <nuspecAnalyzerEnabled>false</nuspecAnalyzerEnabled>
+                    <composerAnalyzerEnabled>false</composerAnalyzerEnabled>
+                    <bundleAuditAnalyzerEnabled>false</bundleAuditAnalyzerEnabled>
+                    <retireJsAnalyzerEnabled>false</retireJsAnalyzerEnabled>
+                    <pnpmAuditAnalyzerEnabled>false</pnpmAuditAnalyzerEnabled>
+                    <yarnAuditAnalyzerEnabled>false</yarnAuditAnalyzerEnabled>
+                    <npmAuditAnalyzerEnabled>false</npmAuditAnalyzerEnabled>
+                    <nugetAnalyzerEnabled>false</nugetAnalyzerEnabled>
+                    <msbuildProjectAnalyzerEnabled>false</msbuildProjectAnalyzerEnabled>
+                    <gradleAnalyzerEnabled>false</gradleAnalyzerEnabled>
+                    <pipAnalyzerEnabled>false</pipAnalyzerEnabled>
+                    <pipfileAnalyzerEnabled>false</pipfileAnalyzerEnabled>
+                    <poetryAnalyzerEnabled>false</poetryAnalyzerEnabled>
+                    <cpanfileAnalyzerEnabled>false</cpanfileAnalyzerEnabled>
+                    <mavenInstallAnalyzerEnabled>false</mavenInstallAnalyzerEnabled>
+                    <mavenDepShieldAnalyzerEnabled>false</mavenDepShieldAnalyzerEnabled>
+                    <ossIndexAnalyzerEnabled>false</ossIndexAnalyzerEnabled>
+                    <snykAnalyzerEnabled>false</snykAnalyzerEnabled>
+                    <nexusAnalyzerEnabled>false</nexusAnalyzerEnabled>
+                    <artifactoryAnalyzerEnabled>false</artifactoryAnalyzerEnabled>
                 </configuration>
             </plugin>
 

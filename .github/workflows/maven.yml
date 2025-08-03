@@ -132,7 +132,7 @@ jobs:
         restore-keys: ${{ runner.os }}-dependency-check-
 
     - name: Run OWASP Dependency Check
-      run: mvn -B org.owasp:dependency-check-maven:check -DskipProvidedScope=true -DskipRuntimeScope=true
+      run: mvn -B org.owasp:dependency-check-maven:check
       env:
         # NVD API Key for faster vulnerability database updates
         # Get a free API key from: https://nvd.nist.gov/developers/request-an-api-key
