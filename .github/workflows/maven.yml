@@ -49,7 +49,7 @@ jobs:
       run: mvn -B test -Dtest="!*UtilsUnitTest*" -DfailIfNoTests=false
       env:
         # Enable test reporting and handle platform-specific tests
-        MAVEN_OPTS: -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN
+        MAVEN_OPTS: -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN -Djava.awt.headless=true
         # Skip Windows-specific tests on Linux runners
         SKIP_WINDOWS_TESTS: true
         # Headless environment for CI/CD
@@ -58,7 +58,7 @@ jobs:
     - name: Run Integration Tests
       run: mvn -B verify -DskipUnitTests
       env:
-        MAVEN_OPTS: -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN
+        MAVEN_OPTS: -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN -Djava.awt.headless=true
         # Headless environment for CI/CD
         JAVA_AWT_HEADLESS: true
 
