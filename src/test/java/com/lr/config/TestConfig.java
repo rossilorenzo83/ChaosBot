@@ -2,11 +2,14 @@ package com.lr.config;
 
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.env.Environment;
 
 import java.awt.*;
 import java.awt.image.BufferedImage;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -14,8 +17,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 
 /**
- * Test configuration that provides a conditional Robot bean for testing.
- * This allows tests to run with real Robot when display is available, or mock Robot when not.
+ * Test configuration that provides conditional beans for testing.
+ * This allows tests to run with real components when available, or mock components when not.
+ * Updated for Spring Boot 3.5.4 and Tess4J 5.16.0 compatibility.
  */
 @TestConfiguration
 public class TestConfig {
@@ -32,6 +36,7 @@ public class TestConfig {
      * - Mock Robot when no display is available (headless environments)
      */
     @Bean
+    @Primary
     public Robot robot() {
         // Check if we're in a headless environment
         String display = System.getenv("DISPLAY");
@@ -81,5 +86,24 @@ public class TestConfig {
         
         // Return the configured mock
         return mockRobot;
+    }
+
+    /**
+     * Provides a test-specific ExecutorService for testing.
+     * Uses a single-threaded executor for predictable test behavior.
+     */
+    @Bean
+    @Primary
+    public ExecutorService executorService() {
+        return Executors.newSingleThreadExecutor();
+    }
+
+    /**
+     * Provides a test-specific Random bean for predictable test behavior.
+     */
+    @Bean
+    @Primary
+    public java.util.Random random() {
+        return new java.util.Random(42L); // Fixed seed for predictable tests
     }
 } 

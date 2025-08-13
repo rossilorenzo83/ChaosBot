@@ -17,11 +17,12 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 /**
  * Integration tests for Robot bean that test real Robot functionality when available.
  * These tests will be skipped in headless environments (CI/CD) where no display is available.
+ * Updated for Spring Boot 3.5.4 and Tess4J 5.16.0 compatibility.
  */
 @ExtendWith(SpringExtension.class)
-@SpringBootTest
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @ActiveProfiles("test")
-@Import(TestConfig.class)
+@Import({TestConfig.class, Tess4JTestConfig.class})
 public class RobotIntegrationTest {
 
     @Autowired
@@ -113,15 +114,32 @@ public class RobotIntegrationTest {
     }
 
     @Test
-    void shouldLogRobotType() {
-        // Log what type of Robot we're testing with
-        if (isRealRobotAvailable()) {
-            System.out.println("Testing with REAL Robot - display available");
-        } else {
-            System.out.println("Testing with MOCK Robot - no display available");
-        }
+    void shouldWorkWithMockRobotInHeadlessEnvironment() {
+        // This test should always pass, even with mock Robot
+        // It verifies that our mock Robot configuration works correctly
         
-        // This test always passes, but provides information
-        assertNotNull(robot, "Robot should always be available");
+        try {
+            Rectangle screenRect = new Rectangle(0, 0, 100, 100);
+            BufferedImage screenshot = robot.createScreenCapture(screenRect);
+            
+            assertNotNull(screenshot, "Mock Robot screen capture should not be null");
+            assertEquals(100, screenshot.getWidth(), "Mock Robot screen capture should have correct width");
+            assertEquals(100, screenshot.getHeight(), "Mock Robot screen capture should have correct height");
+            
+            // Mock Robot should return black pixels
+            Color pixelColor = robot.getPixelColor(0, 0);
+            assertNotNull(pixelColor, "Mock Robot pixel color should not be null");
+            
+        } catch (Exception e) {
+            fail("Mock Robot should work without exceptions: " + e.getMessage());
+        }
+    }
+
+    @Test
+    void shouldSupportSpringBoot35Integration() {
+        // Test that Spring Boot 3.5.4 integration works correctly
+        String springVersion = org.springframework.core.SpringVersion.getVersion();
+        assertNotNull(springVersion, "Spring version should not be null");
+        assertTrue(springVersion.startsWith("6."), "Should be using Spring Framework 6.x with Spring Boot 3.5.4");
     }
 } 
