@@ -39,8 +39,6 @@ public class ChaosBot implements CommandLineRunner {
     @Autowired
     private ExecutorService executorService;
     @Autowired
-    Robot robot;
-    @Autowired
     Random random;
     @Autowired
     GeneralConfig generalConfig;
@@ -151,7 +149,7 @@ public class ChaosBot implements CommandLineRunner {
 
                         case RSS_FARMING:
                         default:
-                            coreMechanics.findAndFarm(marchConfig.getTargetRssLevel(), "ALL".equalsIgnoreCase(marchConfig.getRssType()) ? RssType.values()[random.nextInt(RssType.values().length)] : RssType.valueOf(marchConfig.getRssType()), windowInfo, hasEncampments);
+                            coreMechanics.findAndFarm(marchConfig.getTargetRssLevel(), getRssTypeFromConfig(), windowInfo, hasEncampments);
                             break;
                     }
 
@@ -163,6 +161,15 @@ public class ChaosBot implements CommandLineRunner {
         } catch (AWTException | IOException | URISyntaxException | InterruptedException | TesseractException e) {
             e.printStackTrace();
         }
+    }
+
+    private RssType getRssTypeFromConfig() {
+
+        return switch (marchConfig.getRssType()) {
+            case "ALL" -> RssType.values()[random.nextInt(RssType.values().length)];
+            case "ALL_WO_WS" -> RssType.values()[random.nextInt(RssType.values().length - 1)];
+            default -> RssType.valueOf(marchConfig.getRssType());
+        };
     }
 
 }
