@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -11,10 +12,12 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Unit tests for ChaosBot main application class.
  * Following TDD principles - tests are written before implementation.
+ * Updated for Spring Boot 3.5.4 and Tess4J 5.16.0 compatibility.
  */
 @ExtendWith(SpringExtension.class)
-@SpringBootTest
-@Import(com.lr.config.TestConfig.class)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@ActiveProfiles("test")
+@Import({com.lr.config.TestConfig.class, com.lr.config.Tess4JTestConfig.class})
 class ChaosBotTest {
 
     @Test
@@ -37,5 +40,35 @@ class ChaosBotTest {
             // This test ensures the main method signature is correct
             // In a real scenario, we would test actual functionality
         }, "Main method should be accessible");
+    }
+
+    @Test
+    void springBootVersionCompatibility() {
+        // Test that Spring Boot 3.5.4 is properly loaded
+        String springVersion = org.springframework.core.SpringVersion.getVersion();
+        assertNotNull(springVersion, "Spring version should not be null");
+        assertTrue(springVersion.startsWith("6."), "Should be using Spring Framework 6.x with Spring Boot 3.5.4");
+    }
+
+    @Test
+    void tess4jCompatibility() {
+        // Test that Tess4J 5.16.0 is properly loaded
+        try {
+            Class.forName("net.sourceforge.tess4j.Tesseract");
+            assertTrue(true, "Tess4J 5.16.0 should be available");
+        } catch (ClassNotFoundException e) {
+            fail("Tess4J should be available: " + e.getMessage());
+        }
+    }
+
+    @Test
+    void opencvCompatibility() {
+        // Test that OpenCV 4.9.0-0 is properly loaded
+        try {
+            Class.forName("org.opencv.core.Mat");
+            assertTrue(true, "OpenCV should be available");
+        } catch (ClassNotFoundException e) {
+            fail("OpenCV should be available: " + e.getMessage());
+        }
     }
 } 
