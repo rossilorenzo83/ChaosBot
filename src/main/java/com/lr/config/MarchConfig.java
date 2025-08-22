@@ -16,6 +16,8 @@ public class MarchConfig {
 
     private Integer marchesAvailable;
 
+    private Integer marchPreset;
+
     private String targetRssLevel;
 
     private String rssType;

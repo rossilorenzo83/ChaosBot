@@ -27,8 +27,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 
 import static com.lr.business.CoreMechanics.CONVERT_IMG_FLAG;
-import static com.lr.utils.ScreenUtils.findCoordsOnScreen;
-import static com.lr.utils.ScreenUtils.takeScreenCapture;
+import static com.lr.utils.ScreenUtils.*;
 
 @SpringBootApplication
 @EnableConfigurationProperties({GeneralConfig.class, MarchConfig.class})
@@ -92,7 +91,7 @@ public class ChaosBot implements CommandLineRunner {
                 log.info("Searching coords for control:" + mainMapButton.name());
                 try {
 
-                    Double[] absCoords = findCoordsOnScreen(mainMapButton.getImgPath(), fullScreen, windowInfo, true, generalConfig.getImageQualityLowerBound());
+                    Double[] absCoords = findCoordsOnScreenFlexible(mainMapButton.getImgPath(), fullScreen, windowInfo, true, generalConfig.getImageQualityLowerBound());
                     currentWindowCoords.put(mainMapButton, absCoords);
 
                 } catch (ImageNotMatchedException e) {
@@ -135,7 +134,7 @@ public class ChaosBot implements CommandLineRunner {
                     switch (generalConfig.getActionType()) {
 
                         case ARMY_FARMING:
-                            coreMechanics.armyFarming(marchConfig.getTargetArmyLevel(), availMarches, windowInfo, hasEncampments);
+                            coreMechanics.armyFarming(marchConfig.getTargetArmyLevel(), marchConfig.getMarchPreset() != null? marchConfig.getMarchPreset():availMarches, windowInfo, hasEncampments);
                             break;
 
                         case CHALLENGE_STATS:

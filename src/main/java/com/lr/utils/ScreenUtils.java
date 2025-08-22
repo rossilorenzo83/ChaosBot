@@ -13,6 +13,7 @@ import org.springframework.core.io.ClassPathResource;
 import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
+import java.awt.image.DataBufferByte;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -104,18 +105,81 @@ public class ScreenUtils {
 
     }
 
+
+    public static Double[] findCoordsOnScreenFlexible(
+            String pathImgToFind,
+            Mat fullScreenImg,
+            WinUtils.WindowInfo windowInfo,
+            Boolean inMainMap,
+            Double minQualityThreshold
+    ) throws URISyntaxException, ImageNotMatchedException, IOException {
+        try {
+            // 1. Load template image
+            InputStream inputStream = new ClassPathResource(pathImgToFind).getInputStream();
+            File f = new File("targetFile-" + windowInfo.getTitle() + ".PNG");
+            java.nio.file.Files.copy(
+                    inputStream,
+                    f.toPath(),
+                    StandardCopyOption.REPLACE_EXISTING
+            );
+            inputStream.close();
+            Mat toMatch = Imgcodecs.imread(f.getPath(), Imgcodecs.IMREAD_COLOR); // Use your CONVERT_IMG_FLAG if needed
+
+            double screenshotWidth = fullScreenImg.width();
+            double screenshotHeight = fullScreenImg.height();
+            log.info("Template size: {}x{}", screenshotWidth, screenshotHeight);
+
+            boolean isPortrait = screenshotHeight > screenshotWidth;
+            log.info("Portrait resolution: {}", isPortrait);
+
+            Double resizeFactor = computeScaleFactor(fullScreenImg);
+            log.info("Resized template image dimensions: {}", resizeFactor);
+            Mat resizedTemplate = resizeImage(toMatch, resizeFactor);
+
+            // Perform template matching
+            Mat result = new Mat();
+            matchTemplate(fullScreenImg, resizedTemplate, result, TM_CCOEFF_NORMED);
+            Core.MinMaxLocResult mmr = Core.minMaxLoc(result);
+
+            if (mmr.maxVal >= minQualityThreshold) {
+                log.info("Template matched with confidence: {}", mmr.maxVal);
+                //Draw rectangle on result image
+                rectangle(fullScreenImg, mmr.maxLoc, new Point(mmr.maxLoc.x + toMatch.cols(),
+                        mmr.maxLoc.y + toMatch.rows()), new Scalar(255, 255, 255));
+                double offsetX = mmr.maxLoc.x;
+                double offsetY = mmr.maxLoc.y;
+                double absXCoord = windowInfo.getRect().left + offsetX + resizedTemplate.size().width / 2;
+                double absYCoord = windowInfo.getRect().top + offsetY + resizedTemplate.size().height / 2;
+
+                return new Double[]{absXCoord, absYCoord};
+            } else {
+                log.error("Insufficient confidence {} matching the provided template", mmr.maxVal);
+                throw new ImageNotMatchedException("Cannot find img: " + pathImgToFind, inMainMap);
+            }
+
+        }
+        catch (CvException e) {
+            throw new ImageNotMatchedException("Cannot find img: " + pathImgToFind, inMainMap);
+        }
+    }
+
+
     public static String extractTextFromImage(String imgPath, Tesseract ocrEngine) throws TesseractException {
         return ocrEngine.doOCR(new File(imgPath));
     }
 
 
     private static Double computeScaleFactor(Mat originalImage) {
-        //scale for height
-        Double scaleHeight = originalImage.height() / GeneralConfig.SUPPORTED_IMG_HEIGHT;
-        //scale for width
-        Double scaleWidth = originalImage.width() / GeneralConfig.SUPPORTED_IMG_WIDTH;
 
-        return Math.max(scaleHeight, scaleWidth);
+        boolean isPortrait = originalImage.height() > originalImage.width();
+
+
+        //scale for height
+        Double scaleHeight = originalImage.height()/ (isPortrait?GeneralConfig.SUPPORTED_IMG_HEIGHT: GeneralConfig.SUPPORTED_IMG_WIDTH);
+        //scale for width
+        Double scaleWidth = originalImage.width()/ (isPortrait?GeneralConfig.SUPPORTED_IMG_WIDTH: GeneralConfig.SUPPORTED_IMG_HEIGHT);
+
+        return Math.min(scaleHeight, scaleWidth);
     }
 
 
