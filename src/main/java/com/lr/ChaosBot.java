@@ -75,6 +75,7 @@ public class ChaosBot implements CommandLineRunner {
 
     private void mainLogic(WinUtils.WindowInfo windowInfo) {
         Integer availMarches = marchConfig.getMarchesAvailable();
+        Boolean firstRun = true;
 
         try {
 
@@ -118,6 +119,7 @@ public class ChaosBot implements CommandLineRunner {
                 if (availMarches == 0 && (System.currentTimeMillis() - timeLastActionPerformed) > (marchConfig.getMarchesIntervalMins() * 60 * 1000)) {
                     log.info("Timer expired");
                     availMarches = marchConfig.getMarchesAvailable();
+                    firstRun = true;
                 }
 
 
@@ -132,7 +134,8 @@ public class ChaosBot implements CommandLineRunner {
                     switch (generalConfig.getActionType()) {
 
                         case ARMY_FARMING:
-                            coreMechanics.armyFarming(marchConfig.getTargetArmyLevel(), marchConfig.getMarchPreset() != null? marchConfig.getMarchPreset():availMarches, windowInfo, hasEncampments);
+                            log.info("March preset provided? {}", marchConfig.getMarchPreset());
+                            coreMechanics.armyFarming(marchConfig.getTargetArmyLevel(), marchConfig.getMarchPreset() != null? marchConfig.getMarchPreset():availMarches, windowInfo, hasEncampments, marchConfig.getIsSkelly(), firstRun);
                             break;
 
                         case CHALLENGE_STATS:
@@ -154,6 +157,7 @@ public class ChaosBot implements CommandLineRunner {
                     }
 
                     availMarches--;
+                    firstRun = false;
                     timeLastActionPerformed = System.currentTimeMillis();
                 }
             }

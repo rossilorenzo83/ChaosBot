@@ -53,12 +53,9 @@ public class ScreenUtils {
         return filePath;
     }
 
-    public static Double[] findCoordsOnScreen(String pathImgToFind, Mat fullScreenImg, WinUtils.WindowInfo windowInfo, Boolean inMainMap, Double minQualityThreshold) throws URISyntaxException, ImageNotMatchedException, IOException {
+    public static Double[] getTemplateImageSizeAdjusted(String pathImgToFind, Mat fullScreenImg, WinUtils.WindowInfo windowInfo) throws  IOException {
 
-        try {
-
-
-            InputStream inputStream = new ClassPathResource(pathImgToFind).getInputStream();
+           InputStream inputStream = new ClassPathResource(pathImgToFind).getInputStream();
             File f = new File("targetFile-" + windowInfo.getTitle() + ".PNG");
             java.nio.file.Files.copy(
                     inputStream,
@@ -75,34 +72,7 @@ public class ScreenUtils {
             Mat resizedToMatch = resizeImage(toMatch, scaleFactor);
             log.info("Resized template image dimensions: {}", resizedToMatch.size().toString());
 
-
-            Mat outputImage = new Mat();
-            matchTemplate(fullScreenImg, resizedToMatch, outputImage, TM_CCOEFF_NORMED);
-
-            Core.MinMaxLocResult mmr = Core.minMaxLoc(outputImage);
-
-            if (mmr.maxVal >= minQualityThreshold) {
-
-                log.info("Template matched with confidence: {}", mmr.maxVal);
-                org.opencv.core.Point matchLoc = mmr.maxLoc;
-                //Draw rectangle on result image
-                rectangle(fullScreenImg, matchLoc, new Point(matchLoc.x + toMatch.cols(),
-                        matchLoc.y + toMatch.rows()), new Scalar(255, 255, 255));
-
-                Double offsetX = matchLoc.x;
-                Double offsetY = matchLoc.y;
-                Double absXCoord = windowInfo.getRect().left + offsetX + toMatch.size().width / 2;
-                Double absYCoord = windowInfo.getRect().top + offsetY + toMatch.size().height / 2;
-                return new Double[]{absXCoord, absYCoord};
-            } else {
-                log.error("Insufficient confidence {} matching the provided template", mmr.maxVal);
-                throw new ImageNotMatchedException("Cannot find img: " + pathImgToFind, inMainMap);
-            }
-
-        } catch (CvException e) {
-            throw new ImageNotMatchedException(e.getMessage(), inMainMap);
-        }
-
+            return new Double[]{resizedToMatch.size().width, resizedToMatch.size().height};
     }
 
 
@@ -190,6 +160,15 @@ public class ScreenUtils {
         Size size = new Size(originalImage.width() * scaleFactor, originalImage.height() * scaleFactor);
         resize(originalImage, resizedImage, size);
         return resizedImage;
+    }
+
+    public static Double[] computeGoIconForSpecificArmy(Double[] rowCoords , WinUtils.WindowInfo windowInfo, String goArmyImagePath, Mat fullScreenImg) throws IOException {
+
+       double xOffset = rowCoords[0] - windowInfo.getRect().left;
+       double x = windowInfo.getRect().right -xOffset - getTemplateImageSizeAdjusted(goArmyImagePath, fullScreenImg, windowInfo)[0]/2;
+
+       return new Double[]{x, rowCoords[1]};
+
     }
 
     public static Boolean isSameImage(Mat image1, Mat image2) {

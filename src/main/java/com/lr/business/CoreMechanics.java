@@ -100,7 +100,7 @@ public class CoreMechanics {
             } else {
                 rssTypeChoice = findCoordsOnScreenFlexible(SearchViewButtons.getEnumFromRssType(rssType).getImgPath(), searchScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
             }
-            
+
             log.info("Coords for rss expander for rss {} found at: {}", rssType, rssTypeChoice);
             moveAndClick(rssTypeChoice);
 
@@ -190,7 +190,7 @@ public class CoreMechanics {
             String qtyAvail = splitText.length > 1 ? splitText[1].trim() : "";
             log.info("Extracted residual qty: {}", qtyAvail);
 
-            if (qtyAvail.matches("^[0-9]+$") || (qtyAvail.contains("k") && Double.parseDouble(extractSafelyNumberFromOCRString(qtyAvail).replaceAll(",",".")) < 30)) {
+            if (qtyAvail.matches("^[0-9]+$") || (qtyAvail.contains("k") && Double.parseDouble(extractSafelyNumberFromOCRString(qtyAvail).replaceAll(",", ".")) < 30)) {
                 Double[] heroSliderCoords = findCoordsOnScreenFlexible(ExpeditionViewButtons.HERO_SLIDER.getImgPath(), armySelectionScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
                 moveAndClick(heroSliderCoords);
             }
@@ -202,14 +202,14 @@ public class CoreMechanics {
         }
     }
 
-    private static String extractSafelyNumberFromOCRString(String qtyAvail) throws TesseractException{
+    private static String extractSafelyNumberFromOCRString(String qtyAvail) throws TesseractException {
         String parsedQty = qtyAvail.split("k")[0];
-        if(parsedQty.matches("^[0-9.,]+$"))
+        if (parsedQty.matches("^[0-9.,]+$"))
             return parsedQty;
         else throw new TesseractException("Parsed qty isn't a number");
     }
 
-    public void armyFarming(String armyLvl, int armyPreset, WinUtils.WindowInfo windowInfo, boolean hasEncampment) throws IOException, AWTException, InterruptedException, URISyntaxException {
+    public void armyFarming(String armyLvl, int armyPreset, WinUtils.WindowInfo windowInfo, boolean hasEncampment, Boolean isSkelly, Boolean isFirstRun) throws IOException, AWTException, InterruptedException, URISyntaxException {
 
         moveAndClick(mainMapButtonsCoordsMap.get(windowInfo.getTitle()).get(MainMapButtons.SEARCH));
 
@@ -217,40 +217,48 @@ public class CoreMechanics {
         Mat searchScreen = Imgcodecs.imread(searchViewPath, CONVERT_IMG_FLAG);
 
         try {
-
-            Double[] rssExpander = findCoordsOnScreenFlexible(SearchViewButtons.SEARCH_EXPANDER.getImgPath(), searchScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
             Double[] mapSearchButton = findCoordsOnScreenFlexible(Locale.ENGLISH.equals(generalConfig.getGameLanguage()) ? SearchViewButtons.SEARCH_MAP_EN.getImgPath() : SearchViewButtons.SEARCH_MAP_FR.getImgPath(), searchScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
+            if (isFirstRun) {
+                Double[] rssExpander = findCoordsOnScreenFlexible(SearchViewButtons.SEARCH_EXPANDER.getImgPath(), searchScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
 
-            moveAndClick(rssExpander);
+                moveAndClick(rssExpander);
+                searchViewPath = takeScreenCapture(windowInfo);
+                searchScreen = Imgcodecs.imread(searchViewPath, CONVERT_IMG_FLAG);
 
-            searchViewPath = takeScreenCapture(windowInfo);
-            searchScreen = Imgcodecs.imread(searchViewPath, CONVERT_IMG_FLAG);
-
-            Double[] lvlChoiceExpander = findCoordsOnScreenFlexible(SearchViewButtons.SEARCH_LEVEL_EXPANDER.getImgPath(), searchScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
-
-
-            Double[] armyChoice = findCoordsOnScreenFlexible(SearchViewButtons.ARMY_ICON.getImgPath(), searchScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
-            moveAndClick(armyChoice);
-
-            moveAndClick(lvlChoiceExpander);
-
-            searchViewPath = takeScreenCapture(windowInfo);
-            searchScreen = Imgcodecs.imread(searchViewPath, CONVERT_IMG_FLAG);
+                Double[] lvlChoiceExpander = findCoordsOnScreenFlexible(SearchViewButtons.SEARCH_LEVEL_EXPANDER.getImgPath(), searchScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
 
 
-            armyLvl = handleRange(armyLvl);
+                Double[] armyChoice = findCoordsOnScreenFlexible(SearchViewButtons.ARMY_ICON.getImgPath(), searchScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
+                moveAndClick(armyChoice);
 
-            Double[] lvlChoice = findCoordsOnScreenFlexible(SearchViewButtons.SEARCH_LEVEL_EXPANDER.getLevelIconImgPath(armyLvl, generalConfig.getGameLanguage()), searchScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
-            moveAndClick(lvlChoice);
+                moveAndClick(lvlChoiceExpander);
 
+                searchViewPath = takeScreenCapture(windowInfo);
+                searchScreen = Imgcodecs.imread(searchViewPath, CONVERT_IMG_FLAG);
+
+
+                armyLvl = handleRange(armyLvl);
+
+                Double[] lvlChoice = findCoordsOnScreenFlexible(SearchViewButtons.SEARCH_LEVEL_EXPANDER.getLevelIconImgPath(armyLvl, generalConfig.getGameLanguage()), searchScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
+                moveAndClick(lvlChoice);
+            }
 
             moveAndClick(mapSearchButton);
 
             searchViewPath = takeScreenCapture(windowInfo);
             searchScreen = Imgcodecs.imread(searchViewPath, CONVERT_IMG_FLAG);
 
-            Double[] goToArmy = findCoordsOnScreenFlexible(Locale.ENGLISH.equals(generalConfig.getGameLanguage()) ? SearchViewButtons.GO_RSS_EN.getImgPath() : SearchViewButtons.GO_RSS_FR.getImgPath(), searchScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
-            moveAndClick(goToArmy);
+            if (isSkelly != null && isSkelly) {
+                //Make sure we take only skelly army
+                Double[] skellyCoord = findCoordsOnScreenFlexible(SearchViewButtons.SEARCH_ARMY_SKELLY.getImgPath(), searchScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
+                Double[] extrapolateGoIconCoords = computeGoIconForSpecificArmy(skellyCoord, windowInfo, Locale.ENGLISH.equals(generalConfig.getGameLanguage()) ? SearchViewButtons.GO_RSS_EN.getImgPath() : SearchViewButtons.GO_RSS_FR.getImgPath(), searchScreen);
+                log.info("Computed coord for go button on skelly army row: {}x{}", extrapolateGoIconCoords[0], extrapolateGoIconCoords[1]);
+                moveAndClick(extrapolateGoIconCoords);
+            } else {
+                Double[] goToArmy = findCoordsOnScreenFlexible(Locale.ENGLISH.equals(generalConfig.getGameLanguage()) ? SearchViewButtons.GO_RSS_EN.getImgPath() : SearchViewButtons.GO_RSS_FR.getImgPath(), searchScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
+                moveAndClick(goToArmy);
+
+            }
 
             Double[] armyOnMap = findWindowCenterCoords(windowInfo);
             moveAndClick(armyOnMap);
@@ -616,7 +624,7 @@ public class CoreMechanics {
      */
     private Double[] findWarpstoneIconWithScrolling(Mat searchScreen, WinUtils.WindowInfo windowInfo) throws InterruptedException, AWTException, IOException, URISyntaxException, ImageNotMatchedException {
         log.info("Looking for warpstone icon with scrolling logic");
-        
+
         int scrollCounter = 0;
         boolean warpstoneFound = false;
         Double[] warpstoneIconCoords = null;
@@ -629,19 +637,19 @@ public class CoreMechanics {
                 log.info("Warpstone icon found at scroll position: {}", scrollCounter);
             } catch (ImageNotMatchedException e) {
                 log.info("Warpstone icon not found on current screen, scrolling...");
-                
+
                 // Scroll down to look for warpstone
                 Double[] bottomCoords = findWindowBottomCoords(windowInfo);
                 robot.mouseMove(bottomCoords[0].intValue(), bottomCoords[1].intValue());
                 Thread.sleep(generalConfig.getActionIntervalMs());
-                
+
                 robot.mouseWheel(1);
                 Thread.sleep(generalConfig.getActionIntervalMs());
-                
+
                 // Take new screenshot after scrolling
                 String searchViewPath = takeScreenCapture(windowInfo);
                 searchScreen = Imgcodecs.imread(searchViewPath, CONVERT_IMG_FLAG);
-                
+
                 scrollCounter++;
             }
         } while (!warpstoneFound && scrollCounter < 5); // Limit scrolling to prevent infinite loop

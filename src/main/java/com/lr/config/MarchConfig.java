@@ -22,5 +22,7 @@ public class MarchConfig {
 
     private String rssType;
 
+    private Boolean isSkelly;
+
     private String targetArmyLevel;
 }

@@ -11,6 +11,7 @@ public enum SearchViewButtons {
     SEARCH_EXPANDER("search_type_expander.PNG", Optional.empty(), Optional.empty(), Optional.empty()),
 
     SEARCH_LEVEL_EXPANDER("search_lvl_expander.PNG", Optional.empty(), Optional.empty(), Optional.empty()),
+    SEARCH_ARMY_SKELLY("skelly.PNG", Optional.empty(), Optional.empty(), Optional.empty()),
     SEARCH_MAP_FR("search_button_fr.PNG", Optional.empty(), Optional.empty(), Optional.empty()),
     SEARCH_MAP_EN("search_button_en.PNG", Optional.empty(), Optional.empty(), Optional.empty()),
 
