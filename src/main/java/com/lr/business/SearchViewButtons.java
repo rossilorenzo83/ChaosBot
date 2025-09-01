@@ -11,6 +11,7 @@ public enum SearchViewButtons {
     SEARCH_EXPANDER("search_type_expander.PNG", Optional.empty(), Optional.empty(), Optional.empty()),
 
     SEARCH_LEVEL_EXPANDER("search_lvl_expander.PNG", Optional.empty(), Optional.empty(), Optional.empty()),
+    SEARCH_ARMY_SKELLY("skelly.PNG", Optional.empty(), Optional.empty(), Optional.empty()),
     SEARCH_MAP_FR("search_button_fr.PNG", Optional.empty(), Optional.empty(), Optional.empty()),
     SEARCH_MAP_EN("search_button_en.PNG", Optional.empty(), Optional.empty(), Optional.empty()),
 
@@ -21,6 +22,7 @@ public enum SearchViewButtons {
     FOOD_ICON("farm_icon.PNG", Optional.of(RssType.FOOD), Optional.of("food_source_map.PNG"), Optional.of("food_collect_map.PNG")),
     IRON_ICON("iron_icon.PNG", Optional.of(RssType.IRON), Optional.of("iron_source_map.PNG"), Optional.of("iron_collect_map.PNG")),
     WOOD_ICON("wood_icon.PNG", Optional.of(RssType.WOOD), Optional.of("wood_source_map.PNG"), Optional.of("wood_collect_map.PNG")),
+    WARPSTONE_ICON("wp_icon.PNG", Optional.of(RssType.WARPSTONE), Optional.of("wp_source_map.PNG"), Optional.of("wp_collect_map.PNG")),
     ARMY_ICON("army_search_icon.PNG", Optional.empty(), Optional.empty(), Optional.empty()),
 
     FOE_ICON("foe_icon.PNG", Optional.empty(), Optional.empty(), Optional.empty());
@@ -52,6 +54,7 @@ public enum SearchViewButtons {
             case LEAD -> SearchViewButtons.LEAD_ICON;
             case FOOD -> SearchViewButtons.FOOD_ICON;
             case IRON -> SearchViewButtons.IRON_ICON;
+            case WARPSTONE -> SearchViewButtons.WARPSTONE_ICON;
             default -> SearchViewButtons.WOOD_ICON;
         };
     }

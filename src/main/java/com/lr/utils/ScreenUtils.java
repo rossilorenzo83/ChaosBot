@@ -13,6 +13,7 @@ import org.springframework.core.io.ClassPathResource;
 import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
+import java.awt.image.DataBufferByte;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -52,12 +53,9 @@ public class ScreenUtils {
         return filePath;
     }
 
-    public static Double[] findCoordsOnScreen(String pathImgToFind, Mat fullScreenImg, WinUtils.WindowInfo windowInfo, Boolean inMainMap, Double minQualityThreshold) throws URISyntaxException, ImageNotMatchedException, IOException {
+    public static Double[] getTemplateImageSizeAdjusted(String pathImgToFind, Mat fullScreenImg, WinUtils.WindowInfo windowInfo) throws  IOException {
 
-        try {
-
-
-            InputStream inputStream = new ClassPathResource(pathImgToFind).getInputStream();
+           InputStream inputStream = new ClassPathResource(pathImgToFind).getInputStream();
             File f = new File("targetFile-" + windowInfo.getTitle() + ".PNG");
             java.nio.file.Files.copy(
                     inputStream,
@@ -74,35 +72,67 @@ public class ScreenUtils {
             Mat resizedToMatch = resizeImage(toMatch, scaleFactor);
             log.info("Resized template image dimensions: {}", resizedToMatch.size().toString());
 
+            return new Double[]{resizedToMatch.size().width, resizedToMatch.size().height};
+    }
 
-            Mat outputImage = new Mat();
-            matchTemplate(fullScreenImg, resizedToMatch, outputImage, TM_CCOEFF_NORMED);
 
-            Core.MinMaxLocResult mmr = Core.minMaxLoc(outputImage);
+    public static Double[] findCoordsOnScreenFlexible(
+            String pathImgToFind,
+            Mat fullScreenImg,
+            WinUtils.WindowInfo windowInfo,
+            Boolean inMainMap,
+            Double minQualityThreshold
+    ) throws URISyntaxException, ImageNotMatchedException, IOException {
+        try {
+            // 1. Load template image
+            InputStream inputStream = new ClassPathResource(pathImgToFind).getInputStream();
+            File f = new File("targetFile-" + windowInfo.getTitle() + ".PNG");
+            java.nio.file.Files.copy(
+                    inputStream,
+                    f.toPath(),
+                    StandardCopyOption.REPLACE_EXISTING
+            );
+            inputStream.close();
+            Mat toMatch = Imgcodecs.imread(f.getPath(), Imgcodecs.IMREAD_COLOR); // Use your CONVERT_IMG_FLAG if needed
+
+            double screenshotWidth = fullScreenImg.width();
+            double screenshotHeight = fullScreenImg.height();
+            log.info("Template size: {}x{}", screenshotWidth, screenshotHeight);
+
+            boolean isPortrait = screenshotHeight > screenshotWidth;
+            log.info("Portrait resolution: {}", isPortrait);
+
+            Double resizeFactor = computeScaleFactor(fullScreenImg);
+            log.info("Resized template image dimensions: {}", resizeFactor);
+            Mat resizedTemplate = resizeImage(toMatch, resizeFactor);
+
+            // Perform template matching
+            Mat result = new Mat();
+            matchTemplate(fullScreenImg, resizedTemplate, result, TM_CCOEFF_NORMED);
+            Core.MinMaxLocResult mmr = Core.minMaxLoc(result);
 
             if (mmr.maxVal >= minQualityThreshold) {
-
                 log.info("Template matched with confidence: {}", mmr.maxVal);
-                org.opencv.core.Point matchLoc = mmr.maxLoc;
                 //Draw rectangle on result image
-                rectangle(fullScreenImg, matchLoc, new Point(matchLoc.x + toMatch.cols(),
-                        matchLoc.y + toMatch.rows()), new Scalar(255, 255, 255));
+                rectangle(fullScreenImg, mmr.maxLoc, new Point(mmr.maxLoc.x + toMatch.cols(),
+                        mmr.maxLoc.y + toMatch.rows()), new Scalar(255, 255, 255));
+                double offsetX = mmr.maxLoc.x;
+                double offsetY = mmr.maxLoc.y;
+                double absXCoord = windowInfo.getRect().left + offsetX + resizedTemplate.size().width / 2;
+                double absYCoord = windowInfo.getRect().top + offsetY + resizedTemplate.size().height / 2;
 
-                Double offsetX = matchLoc.x;
-                Double offsetY = matchLoc.y;
-                Double absXCoord = windowInfo.getRect().left + offsetX + toMatch.size().width / 2;
-                Double absYCoord = windowInfo.getRect().top + offsetY + toMatch.size().height / 2;
                 return new Double[]{absXCoord, absYCoord};
             } else {
                 log.error("Insufficient confidence {} matching the provided template", mmr.maxVal);
                 throw new ImageNotMatchedException("Cannot find img: " + pathImgToFind, inMainMap);
             }
 
-        } catch (CvException e) {
-            throw new ImageNotMatchedException(e.getMessage(), inMainMap);
         }
-
+        catch (CvException e) {
+            throw new ImageNotMatchedException("Cannot find img: " + pathImgToFind, inMainMap);
+        }
     }
+
 
     public static String extractTextFromImage(String imgPath, Tesseract ocrEngine) throws TesseractException {
         return ocrEngine.doOCR(new File(imgPath));
@@ -110,12 +140,16 @@ public class ScreenUtils {
 
 
     private static Double computeScaleFactor(Mat originalImage) {
-        //scale for height
-        Double scaleHeight = originalImage.height() / GeneralConfig.SUPPORTED_IMG_HEIGHT;
-        //scale for width
-        Double scaleWidth = originalImage.width() / GeneralConfig.SUPPORTED_IMG_WIDTH;
 
-        return Math.max(scaleHeight, scaleWidth);
+        boolean isPortrait = originalImage.height() > originalImage.width();
+
+
+        //scale for height
+        Double scaleHeight = originalImage.height()/ (isPortrait?GeneralConfig.SUPPORTED_IMG_HEIGHT: GeneralConfig.SUPPORTED_IMG_WIDTH);
+        //scale for width
+        Double scaleWidth = originalImage.width()/ (isPortrait?GeneralConfig.SUPPORTED_IMG_WIDTH: GeneralConfig.SUPPORTED_IMG_HEIGHT);
+
+        return Math.min(scaleHeight, scaleWidth);
     }
 
 
@@ -126,6 +160,15 @@ public class ScreenUtils {
         Size size = new Size(originalImage.width() * scaleFactor, originalImage.height() * scaleFactor);
         resize(originalImage, resizedImage, size);
         return resizedImage;
+    }
+
+    public static Double[] computeGoIconForSpecificArmy(Double[] rowCoords , WinUtils.WindowInfo windowInfo, String goArmyImagePath, Mat fullScreenImg) throws IOException {
+
+       double xOffset = rowCoords[0] - windowInfo.getRect().left;
+       double x = windowInfo.getRect().right -xOffset - getTemplateImageSizeAdjusted(goArmyImagePath, fullScreenImg, windowInfo)[0]/2;
+
+       return new Double[]{x, rowCoords[1]};
+
     }
 
     public static Boolean isSameImage(Mat image1, Mat image2) {

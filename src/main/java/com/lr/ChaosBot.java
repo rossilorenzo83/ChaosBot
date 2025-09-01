@@ -27,8 +27,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 
 import static com.lr.business.CoreMechanics.CONVERT_IMG_FLAG;
-import static com.lr.utils.ScreenUtils.findCoordsOnScreen;
-import static com.lr.utils.ScreenUtils.takeScreenCapture;
+import static com.lr.utils.ScreenUtils.*;
 
 @SpringBootApplication
 @EnableConfigurationProperties({GeneralConfig.class, MarchConfig.class})
@@ -39,8 +38,6 @@ public class ChaosBot implements CommandLineRunner {
     CoreMechanics coreMechanics;
     @Autowired
     private ExecutorService executorService;
-    @Autowired
-    Robot robot;
     @Autowired
     Random random;
     @Autowired
@@ -78,6 +75,7 @@ public class ChaosBot implements CommandLineRunner {
 
     private void mainLogic(WinUtils.WindowInfo windowInfo) {
         Integer availMarches = marchConfig.getMarchesAvailable();
+        Boolean firstRun = true;
 
         try {
 
@@ -92,7 +90,7 @@ public class ChaosBot implements CommandLineRunner {
                 log.info("Searching coords for control:" + mainMapButton.name());
                 try {
 
-                    Double[] absCoords = findCoordsOnScreen(mainMapButton.getImgPath(), fullScreen, windowInfo, true, generalConfig.getImageQualityLowerBound());
+                    Double[] absCoords = findCoordsOnScreenFlexible(mainMapButton.getImgPath(), fullScreen, windowInfo, true, generalConfig.getImageQualityLowerBound());
                     currentWindowCoords.put(mainMapButton, absCoords);
 
                 } catch (ImageNotMatchedException e) {
@@ -121,6 +119,7 @@ public class ChaosBot implements CommandLineRunner {
                 if (availMarches == 0 && (System.currentTimeMillis() - timeLastActionPerformed) > (marchConfig.getMarchesIntervalMins() * 60 * 1000)) {
                     log.info("Timer expired");
                     availMarches = marchConfig.getMarchesAvailable();
+                    firstRun = true;
                 }
 
 
@@ -135,7 +134,8 @@ public class ChaosBot implements CommandLineRunner {
                     switch (generalConfig.getActionType()) {
 
                         case ARMY_FARMING:
-                            coreMechanics.armyFarming(marchConfig.getTargetArmyLevel(), availMarches, windowInfo, hasEncampments);
+                            log.info("March preset provided? {}", marchConfig.getMarchPreset());
+                            coreMechanics.armyFarming(marchConfig.getTargetArmyLevel(), marchConfig.getMarchPreset() != null? marchConfig.getMarchPreset():availMarches, windowInfo, hasEncampments, marchConfig.getIsSkelly(), firstRun);
                             break;
 
                         case CHALLENGE_STATS:
@@ -152,11 +152,12 @@ public class ChaosBot implements CommandLineRunner {
 
                         case RSS_FARMING:
                         default:
-                            coreMechanics.findAndFarm(marchConfig.getTargetRssLevel(), "ALL".equalsIgnoreCase(marchConfig.getRssType()) ? RssType.values()[random.nextInt(RssType.values().length)] : RssType.valueOf(marchConfig.getRssType()), windowInfo, hasEncampments);
+                            coreMechanics.findAndFarm(marchConfig.getTargetRssLevel(), getRssTypeFromConfig(), windowInfo, hasEncampments);
                             break;
                     }
 
                     availMarches--;
+                    firstRun = false;
                     timeLastActionPerformed = System.currentTimeMillis();
                 }
             }
@@ -164,6 +165,15 @@ public class ChaosBot implements CommandLineRunner {
         } catch (AWTException | IOException | URISyntaxException | InterruptedException | TesseractException e) {
             e.printStackTrace();
         }
+    }
+
+    private RssType getRssTypeFromConfig() {
+
+        return switch (marchConfig.getRssType()) {
+            case "ALL" -> RssType.values()[random.nextInt(RssType.values().length)];
+            case "ALL_WO_WS" -> RssType.values()[random.nextInt(RssType.values().length - 1)];
+            default -> RssType.valueOf(marchConfig.getRssType());
+        };
     }
 
 }
