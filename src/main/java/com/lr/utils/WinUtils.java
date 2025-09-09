@@ -32,7 +32,6 @@ public class WinUtils {
 
             boolean enableDebugPrivilege = WinUtils.enableDebugPrivilege();
 
-            //FIXME improve to better filter out
             for (int i = 0; i < processlist.length; i++) {
                 WinNT.HANDLE ph = com.sun.jna.platform.win32.Kernel32.INSTANCE.OpenProcess(0x0400 | 0x0010, false, processlist[i]);
                 if (ph != null) {
@@ -42,7 +41,6 @@ public class WinUtils {
                     String processName = Native.toString(buffer);
 
 
-                    //FIXME add multiple names support
                     if (processName.contains(name)) {
                         pidsBS.add(processlist[i]);
                     }

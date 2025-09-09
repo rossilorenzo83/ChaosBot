@@ -60,14 +60,14 @@ public enum SearchViewButtons {
     }
 
     private final String imgPath;
-    private RssType rssType;
-    private String onMapIconPath;
-    private String onMapCollectButtonPath;
+    private final RssType rssType;
+    private final String onMapIconPath;
+    private final String onMapCollectButtonPath;
 
     SearchViewButtons(String imgPath, Optional<RssType> rssType, Optional<String> onMapIconPath, Optional<String> onMapCollectButtonPath) {
         this.imgPath = imgPath;
-        rssType.ifPresent(type -> this.rssType = type);
-        onMapIconPath.ifPresent(s -> this.onMapIconPath = s);
-        onMapCollectButtonPath.ifPresent(s -> this.onMapCollectButtonPath = s);
+        this.rssType = rssType.orElse(null);
+        this.onMapIconPath = onMapIconPath.orElse(null);
+        this.onMapCollectButtonPath = onMapCollectButtonPath.orElse(null);
     }
 }

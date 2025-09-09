@@ -45,7 +45,7 @@ public class CoreMechanics {
     private final Robot robot;
 
     private final Tesseract ocrEngine;
-    public static int CONVERT_IMG_FLAG = IMREAD_COLOR;
+    public static final int CONVERT_IMG_FLAG = IMREAD_COLOR;
 
     public void setMainMapButtonsCoordsMap(ConcurrentMap<String, Map<MainMapButtons, Double[]>> mainMapButtonsCoordsMap) {
         this.mainMapButtonsCoordsMap = mainMapButtonsCoordsMap;
@@ -75,8 +75,11 @@ public class CoreMechanics {
     public void findAndFarm(String rssLevel, RssType rssType, WinUtils.WindowInfo windowInfo, boolean hasEncampment) throws InterruptedException, AWTException, IOException, URISyntaxException {
 
         //gotoMainMap with keystroke
-
-        moveAndClick(mainMapButtonsCoordsMap.get(windowInfo.getTitle()).get(MainMapButtons.SEARCH));
+        Map<MainMapButtons, Double[]> windowCoords = mainMapButtonsCoordsMap.get(windowInfo.getTitle());
+        if (windowCoords == null) {
+            throw new IllegalStateException("No coordinates found for window: " + windowInfo.getTitle());
+        }
+        moveAndClick(windowCoords.get(MainMapButtons.SEARCH));
 
         String searchViewPath = takeScreenCapture(windowInfo);
         Mat searchScreen = Imgcodecs.imread(searchViewPath, CONVERT_IMG_FLAG);
@@ -211,8 +214,11 @@ public class CoreMechanics {
 
     public void armyFarming(String armyLvl, int armyPreset, WinUtils.WindowInfo windowInfo, boolean hasEncampment, Boolean isSkelly, Boolean isFirstRun) throws IOException, AWTException, InterruptedException, URISyntaxException {
 
-        moveAndClick(mainMapButtonsCoordsMap.get(windowInfo.getTitle()).get(MainMapButtons.SEARCH));
-
+        Map<MainMapButtons, Double[]> windowCoords = mainMapButtonsCoordsMap.get(windowInfo.getTitle());
+        if (windowCoords == null) {
+            throw new IllegalStateException("No coordinates found for window: " + windowInfo.getTitle());
+        }
+        moveAndClick(windowCoords.get(MainMapButtons.SEARCH));
         String searchViewPath = takeScreenCapture(windowInfo);
         Mat searchScreen = Imgcodecs.imread(searchViewPath, CONVERT_IMG_FLAG);
 
@@ -468,7 +474,11 @@ public class CoreMechanics {
             Thread.sleep(generalConfig.getActionIntervalMs());
 
         } catch (ImageNotMatchedException e) {
-            log.error(e.getMessage());
+            log.error("Error in challengeStats: {}", e.getMessage());
+            // Go back to main screen when image recognition fails
+            if (!e.getInMainMap()) {
+                goBackToMainMap();
+            }
         }
     }
 
@@ -500,7 +510,11 @@ public class CoreMechanics {
     public void receivedRss(WinUtils.WindowInfo windowInfo, WebClient discordWebClient) throws InterruptedException, IOException, AWTException, URISyntaxException, TesseractException {
 
         try {
-            moveAndClick(mainMapButtonsCoordsMap.get(windowInfo.getTitle()).get(MainMapButtons.REPORTS));
+            Map<MainMapButtons, Double[]> windowCoords = mainMapButtonsCoordsMap.get(windowInfo.getTitle());
+            if (windowCoords == null) {
+                throw new IllegalStateException("No coordinates found for window: " + windowInfo.getTitle());
+            }
+            moveAndClick(windowCoords.get(MainMapButtons.REPORTS));
             Thread.sleep(generalConfig.getActionIntervalMs());
 
             String repsPage = takeScreenCapture(windowInfo);
@@ -578,7 +592,11 @@ public class CoreMechanics {
             Thread.sleep(generalConfig.getActionIntervalMs());
 
         } catch (ImageNotMatchedException e) {
-            log.error(e.getMessage());
+            log.error("Error in receivedRss: {}", e.getMessage());
+            // Go back to main screen when image recognition fails
+            if (!e.getInMainMap()) {
+                goBackToMainMap();
+            }
         }
     }
 
@@ -614,9 +632,54 @@ public class CoreMechanics {
 
 
     private void goBackToMainMap() throws InterruptedException {
-        robot.keyPress(VK_ESCAPE);
-        robot.keyRelease(VK_ESCAPE);
-        Thread.sleep(generalConfig.getActionIntervalMs());
+        log.info("Attempting to return to main map screen");
+        
+        // Press ESC multiple times to ensure we get back to main map from any nested screen
+        for (int i = 0; i < 3; i++) {
+            robot.keyPress(VK_ESCAPE);
+            robot.keyRelease(VK_ESCAPE);
+            Thread.sleep(500); // Short delay between key presses
+        }
+        
+        // Longer delay to allow UI transitions to complete
+        Thread.sleep(generalConfig.getActionIntervalMs() * 2);
+        
+        log.info("Returned to main map screen");
+    }
+
+    /**
+     * Safe wrapper for image recognition operations - ensures return to main map on any error
+     */
+    private void safeExecute(String operationName, SafeOperation operation) {
+        try {
+            operation.execute();
+        } catch (ImageNotMatchedException e) {
+            log.error("ImageNotMatchedException in {}: {}", operationName, e.getMessage());
+            if (!e.getInMainMap()) {
+                try {
+                    goBackToMainMap();
+                } catch (InterruptedException ie) {
+                    log.error("Interrupted while returning to main map", ie);
+                    Thread.currentThread().interrupt();
+                }
+            }
+        } catch (Exception e) {
+            log.error("Unexpected error in {}: {}", operationName, e.getMessage(), e);
+            try {
+                goBackToMainMap();
+            } catch (InterruptedException ie) {
+                log.error("Interrupted while returning to main map after unexpected error", ie);
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+    /**
+     * Functional interface for safe operation execution
+     */
+    @FunctionalInterface
+    private interface SafeOperation {
+        void execute() throws Exception;
     }
 
     /**

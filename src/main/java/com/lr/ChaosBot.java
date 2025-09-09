@@ -34,19 +34,23 @@ import static com.lr.utils.ScreenUtils.*;
 @Slf4j
 public class ChaosBot implements CommandLineRunner {
 
-    @Autowired
-    CoreMechanics coreMechanics;
-    @Autowired
-    private ExecutorService executorService;
-    @Autowired
-    Random random;
-    @Autowired
-    GeneralConfig generalConfig;
-    @Autowired
-    MarchConfig marchConfig;
+    private final CoreMechanics coreMechanics;
+    private final ExecutorService executorService;
+    private final Random random;
+    private final GeneralConfig generalConfig;
+    private final MarchConfig marchConfig;
+    private final WebClient discordWebClient;
 
     @Autowired
-    WebClient discordWebClient;
+    public ChaosBot(CoreMechanics coreMechanics, ExecutorService executorService, Random random,
+                   GeneralConfig generalConfig, MarchConfig marchConfig, WebClient discordWebClient) {
+        this.coreMechanics = coreMechanics;
+        this.executorService = executorService;
+        this.random = random;
+        this.generalConfig = generalConfig;
+        this.marchConfig = marchConfig;
+        this.discordWebClient = discordWebClient;
+    }
 
 
     public static void main(String[] args) {
@@ -163,7 +167,7 @@ public class ChaosBot implements CommandLineRunner {
             }
 
         } catch (AWTException | IOException | URISyntaxException | InterruptedException | TesseractException e) {
-            e.printStackTrace();
+            log.error("Error in main logic for window: {}", windowInfo.getTitle(), e);
         }
     }
 
