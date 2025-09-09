@@ -686,43 +686,74 @@ public class CoreMechanics {
      * Find warpstone icon with scrolling logic since it's not immediately visible on screen
      */
     private Double[] findWarpstoneIconWithScrolling(Mat searchScreen, WinUtils.WindowInfo windowInfo) throws InterruptedException, AWTException, IOException, URISyntaxException, ImageNotMatchedException {
-        log.info("Looking for warpstone icon with scrolling logic");
+        log.info("Looking for warpstone icon with scrolling logic (primarily downward)");
 
-        int scrollCounter = 0;
-        boolean warpstoneFound = false;
-        Double[] warpstoneIconCoords = null;
-
-        do {
-            try {
-                // Try to find warpstone icon on current screen
-                warpstoneIconCoords = findCoordsOnScreenFlexible(SearchViewButtons.WARPSTONE_ICON.getImgPath(), searchScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
-                warpstoneFound = true;
-                log.info("Warpstone icon found at scroll position: {}", scrollCounter);
-            } catch (ImageNotMatchedException e) {
-                log.info("Warpstone icon not found on current screen, scrolling...");
-
-                // Scroll down to look for warpstone
-                Double[] bottomCoords = findWindowBottomCoords(windowInfo);
-                robot.mouseMove(bottomCoords[0].intValue(), bottomCoords[1].intValue());
-                Thread.sleep(generalConfig.getActionIntervalMs());
-
-                robot.mouseWheel(1);
-                Thread.sleep(generalConfig.getActionIntervalMs());
-
-                // Take new screenshot after scrolling
-                String searchViewPath = takeScreenCapture(windowInfo);
-                searchScreen = Imgcodecs.imread(searchViewPath, CONVERT_IMG_FLAG);
-
-                scrollCounter++;
-            }
-        } while (!warpstoneFound && scrollCounter < 5); // Limit scrolling to prevent infinite loop
-
-        if (!warpstoneFound) {
-            log.error("Warpstone icon not found after scrolling {} times", scrollCounter);
-            throw new ImageNotMatchedException("Warpstone icon not found after scrolling", false);
+        // First, try to find warpstone without scrolling
+        try {
+            Double[] warpstoneIconCoords = findCoordsOnScreenFlexible(SearchViewButtons.WARPSTONE_ICON.getImgPath(), searchScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
+            log.info("Warpstone icon found without scrolling");
+            return warpstoneIconCoords;
+        } catch (ImageNotMatchedException e) {
+            log.info("Warpstone icon not visible, starting scrolling search...");
         }
 
-        return warpstoneIconCoords;
+        // Position mouse over the resource list area and ensure it's focused
+        Double[] resourceListCoords = findResourceListScrollPosition(windowInfo);
+        robot.mouseMove(resourceListCoords[0].intValue(), resourceListCoords[1].intValue());
+        Thread.sleep(generalConfig.getActionIntervalMs());
+
+        // Click to ensure the scrollable area has focus
+        robot.mousePress(BUTTON1_DOWN_MASK);
+        robot.mouseRelease(BUTTON1_DOWN_MASK);
+        Thread.sleep(generalConfig.getActionIntervalMs());
+
+        // Scroll down to find warpstone (primary direction based on user feedback)
+        return performWarpstoneScroll(windowInfo, 1, "down", 8);
+    }
+
+    /**
+     * Calculate the optimal mouse position for scrolling the resource list
+     */
+    private Double[] findResourceListScrollPosition(WinUtils.WindowInfo windowInfo) {
+        Rectangle windowRect = new Rectangle(windowInfo.getRect().left, windowInfo.getRect().top, 
+                Math.abs(windowInfo.getRect().right - windowInfo.getRect().left), 
+                Math.abs(windowInfo.getRect().bottom - windowInfo.getRect().top));
+        
+        // Position mouse on the left side of the window where resource icons are typically located
+        // About 1/4 from the left and middle height
+        double x = windowRect.getX() + windowRect.getWidth() * 0.25;
+        double y = windowRect.getY() + windowRect.getHeight() * 0.5;
+        
+        return new Double[]{x, y};
+    }
+
+    /**
+     * Perform focused scrolling to find warpstone icon (using same pattern as working scroll methods)
+     */
+    private Double[] performWarpstoneScroll(WinUtils.WindowInfo windowInfo, int wheelDirection, String directionName, int maxScrolls) throws InterruptedException, IOException, URISyntaxException, ImageNotMatchedException, AWTException {
+        log.info("Scrolling {} to find warpstone (max {} scrolls)", directionName, maxScrolls);
+        
+        for (int scrollCount = 0; scrollCount < maxScrolls; scrollCount++) {
+            // Perform scroll using same pattern as successful scroll methods
+            robot.mouseWheel(wheelDirection);
+            Thread.sleep(generalConfig.getActionIntervalMs()); // Use same delay as working methods
+            
+            // Take screenshot after scroll
+            String searchViewPath = takeScreenCapture(windowInfo);
+            Mat currentScreen = Imgcodecs.imread(searchViewPath, CONVERT_IMG_FLAG);
+            
+            // Try to find warpstone
+            try {
+                Double[] warpstoneIconCoords = findCoordsOnScreenFlexible(SearchViewButtons.WARPSTONE_ICON.getImgPath(), currentScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
+                log.info("Warpstone icon found after {} {} scrolls", scrollCount + 1, directionName);
+                return warpstoneIconCoords;
+            } catch (ImageNotMatchedException e) {
+                log.info("Warpstone not found after scroll {} {}, continuing...", scrollCount + 1, directionName);
+            }
+        }
+        
+        log.error("Warpstone icon not found after {} {} scrolls", maxScrolls, directionName);
+        throw new ImageNotMatchedException("Warpstone icon not found after scrolling " + directionName, false);
     }
 
 
