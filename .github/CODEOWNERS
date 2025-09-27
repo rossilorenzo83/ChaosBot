@@ -1,0 +1,12 @@
+# Global code ownership - all files require review from repository owner
+* @rossilorenzo83
+
+# Critical files require explicit approval
+/.github/ @rossilorenzo83
+/pom.xml @rossilorenzo83
+/src/main/java/com/lr/ChaosBot.java @rossilorenzo83
+/src/main/java/com/lr/business/CoreMechanics.java @rossilorenzo83
+
+# Configuration files
+/src/main/resources/ @rossilorenzo83
+/CLAUDE.md @rossilorenzo83
