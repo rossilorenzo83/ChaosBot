@@ -133,10 +133,19 @@
                         <format>JSON</format>
                     </formats>
                     <prettyPrint>true</prettyPrint>
+                    <!-- NVD API Configuration -->
+                    <nvdApiKey>${env.NVD_API_KEY}</nvdApiKey>
+                    <nvdMaxRetryCount>10</nvdMaxRetryCount>
+                    <nvdApiDelay>2000</nvdApiDelay>
+                    <nvdValidForHours>24</nvdValidForHours>
                     <!-- Performance optimizations -->
                     <dataDirectory>~/.dependency-check/data</dataDirectory>
                     <connectionTimeout>60000</connectionTimeout>
                     <readTimeout>60000</readTimeout>
+                    <!-- Fallback configuration for when NVD is unavailable -->
+                    <enableExperimental>false</enableExperimental>
+                    <enableRetired>false</enableRetired>
+                    <centralAnalyzerEnabled>true</centralAnalyzerEnabled>
                     <!-- Skip scopes that are less critical for security -->
                     <skipProvidedScope>true</skipProvidedScope>
                     <skipRuntimeScope>true</skipRuntimeScope>
