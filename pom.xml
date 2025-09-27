@@ -133,11 +133,14 @@
                         <format>JSON</format>
                     </formats>
                     <prettyPrint>true</prettyPrint>
-                    <!-- NVD API Configuration -->
-                    <nvdApiKey>${env.NVD_API_KEY}</nvdApiKey>
+                    <!-- NVD API Configuration (NIST) -->
+                    <nvdApiKey>${nvdApiKey}</nvdApiKey>
                     <nvdMaxRetryCount>10</nvdMaxRetryCount>
                     <nvdApiDelay>2000</nvdApiDelay>
                     <nvdValidForHours>24</nvdValidForHours>
+                    <!-- OSS Index Configuration (Sonatype) -->
+                    <ossIndexUsername>${ossIndexUsername}</ossIndexUsername>
+                    <ossIndexPassword>${ossIndexPassword}</ossIndexPassword>
                     <!-- Performance optimizations -->
                     <dataDirectory>~/.dependency-check/data</dataDirectory>
                     <connectionTimeout>60000</connectionTimeout>

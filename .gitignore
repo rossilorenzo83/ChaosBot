@@ -26,3 +26,8 @@
 hs_err_pid*
 /*.jpg
 .cursorrules
+
+# Environment files with secrets
+.env.local
+.env
+*.env

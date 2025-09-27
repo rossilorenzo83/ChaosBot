@@ -132,19 +132,10 @@ jobs:
         restore-keys: ${{ runner.os }}-dependency-check-
 
     - name: Run OWASP Dependency Check
-      run: |
-        if [ -n "${{ secrets.NVD_API_KEY }}" ]; then
-          echo "Running with NVD API key"
-          mvn -B org.owasp:dependency-check-maven:check
-        else
-          echo "Running without NVD API key (may have limited data)"
-          mvn -B org.owasp:dependency-check-maven:check -DnvdDatafeedUrl=https://nvd.nist.gov/feeds/json/cve/1.1/ -Dnvd.api.validForHours=0
-        fi
+      run: mvn -B org.owasp:dependency-check-maven:check -DnvdApiKey=${{ secrets.NVD_API_KEY }} -DossIndexUsername=${{ secrets.OSS_INDEX_USERNAME }} -DossIndexPassword=${{ secrets.OSS_INDEX_PASSWORD }}
       env:
-        NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         # Performance optimizations
         MAVEN_OPTS: "-Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN"
-      continue-on-error: true
         
 
     - name: Upload Security Report
