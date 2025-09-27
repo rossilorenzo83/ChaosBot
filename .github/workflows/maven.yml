@@ -132,8 +132,12 @@ jobs:
         restore-keys: ${{ runner.os }}-dependency-check-
 
     - name: Run OWASP Dependency Check
-      run: mvn -B org.owasp:dependency-check-maven:check -DnvdApiKey=${{ secrets.NVD_API_KEY }} -DossIndexUsername=${{ secrets.OSS_INDEX_USERNAME }} -DossIndexPassword=${{ secrets.OSS_INDEX_PASSWORD }}
+      run: mvn -B org.owasp:dependency-check-maven:check
       env:
+        # Security credentials (passed via environment variables, not command line)
+        NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        OSS_INDEX_USERNAME: ${{ secrets.OSS_INDEX_USERNAME }}
+        OSS_INDEX_PASSWORD: ${{ secrets.OSS_INDEX_PASSWORD }}
         # Performance optimizations
         MAVEN_OPTS: "-Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN"
         
