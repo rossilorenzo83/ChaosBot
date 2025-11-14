@@ -40,16 +40,19 @@ public class ChaosBot implements CommandLineRunner {
     private final GeneralConfig generalConfig;
     private final MarchConfig marchConfig;
     private final WebClient discordWebClient;
+    private final com.lr.config.Beans.RobotFactory robotFactory;
 
     @Autowired
     public ChaosBot(CoreMechanics coreMechanics, ExecutorService executorService, Random random,
-                   GeneralConfig generalConfig, MarchConfig marchConfig, WebClient discordWebClient) {
+                   GeneralConfig generalConfig, MarchConfig marchConfig, WebClient discordWebClient,
+                   com.lr.config.Beans.RobotFactory robotFactory) {
         this.coreMechanics = coreMechanics;
         this.executorService = executorService;
         this.random = random;
         this.generalConfig = generalConfig;
         this.marchConfig = marchConfig;
         this.discordWebClient = discordWebClient;
+        this.robotFactory = robotFactory;
     }
 
 
@@ -69,115 +72,43 @@ public class ChaosBot implements CommandLineRunner {
 
 
         try {
+            // Submit all window tasks to the executor using WindowAutomationWorker
+            hwndList.forEach(windowInfo -> {
+                // Create a worker for each window
+                com.lr.business.WindowAutomationWorker worker = new com.lr.business.WindowAutomationWorker(
+                    windowInfo,
+                    coreMechanics,
+                    generalConfig,
+                    marchConfig,
+                    discordWebClient,
+                    random,
+                    robotFactory
+                );
 
-            hwndList.forEach(
-                    windowInfo -> executorService.execute(() -> mainLogic(windowInfo)));
-        } finally {
+                // Submit worker to executor
+                executorService.execute(worker);
+                log.info("Submitted worker for window: {}", windowInfo.getTitle());
+            });
+
+            log.info("Submitted {} window tasks to executor", hwndList.size());
+
+            // Shutdown executor and wait for tasks to complete
             executorService.shutdown();
-        }
-    }
+            log.info("Executor shutdown initiated. Waiting for tasks to complete...");
 
-    private void mainLogic(WinUtils.WindowInfo windowInfo) {
-        Integer availMarches = marchConfig.getMarchesAvailable();
-        Boolean firstRun = true;
-
-        try {
-
-
-            String fullImagePath = takeScreenCapture(windowInfo);
-            Mat fullScreen = Imgcodecs.imread(fullImagePath, CONVERT_IMG_FLAG);
-            log.info("Loaded image dimensions" + fullScreen.size().toString());
-            Map<MainMapButtons, Double[]> currentWindowCoords = new HashMap<>();
-            Boolean hasEncampments = true;
-
-            for (MainMapButtons mainMapButton : MainMapButtons.values()) {
-                log.info("Searching coords for control:" + mainMapButton.name());
-                try {
-
-                    Double[] absCoords = findCoordsOnScreenFlexible(mainMapButton.getImgPath(), fullScreen, windowInfo, true, generalConfig.getImageQualityLowerBound());
-                    currentWindowCoords.put(mainMapButton, absCoords);
-
-                } catch (ImageNotMatchedException e) {
-                    if (mainMapButton.equals(MainMapButtons.ENCAMPMENTS)) {
-                        hasEncampments = false;
-                        log.info("No encampments found");
-                    } else {
-                        log.error(e.getMessage());
-                    }
-                }
-
+            // Wait for all tasks to complete (or timeout after 1 hour per window)
+            if (!executorService.awaitTermination(hwndList.size() * 60L, java.util.concurrent.TimeUnit.MINUTES)) {
+                log.warn("Executor did not terminate in the specified time. Forcing shutdown...");
+                executorService.shutdownNow();
+            } else {
+                log.info("All window tasks completed successfully.");
             }
 
-            ConcurrentMap<String, Map<MainMapButtons, Double[]>> existingCoordsMap = this.coreMechanics.getMainMapButtonsCoordsMap();
-            if (existingCoordsMap == null)
-                existingCoordsMap = new ConcurrentHashMap<>();
-            existingCoordsMap.put(windowInfo.getTitle(), currentWindowCoords);
-            coreMechanics.setMainMapButtonsCoordsMap(existingCoordsMap);
-
-            Long timeLastActionPerformed = System.currentTimeMillis();
-            while (true) {
-                // Castle coords
-
-                // Search coords
-
-                if (availMarches == 0 && (System.currentTimeMillis() - timeLastActionPerformed) > (marchConfig.getMarchesIntervalMins() * 60 * 1000)) {
-                    log.info("Timer expired");
-                    availMarches = marchConfig.getMarchesAvailable();
-                    firstRun = true;
-                }
-
-
-                if (availMarches > 0) {
-
-                    log.info("Exec started . . . ");
-
-                    File tmpFolder = LoadLibs.extractTessResources("win32-x86-64");
-                    log.info("Tessaract tmp folder path: {}", tmpFolder.getPath());
-                    System.setProperty("java.library.path", tmpFolder.getPath());
-
-                    switch (generalConfig.getActionType()) {
-
-                        case ARMY_FARMING:
-                            log.info("March preset provided? {}", marchConfig.getMarchPreset());
-                            coreMechanics.armyFarming(marchConfig.getTargetArmyLevel(), marchConfig.getMarchPreset() != null? marchConfig.getMarchPreset():availMarches, windowInfo, hasEncampments, marchConfig.getIsSkelly(), firstRun);
-                            break;
-
-                        case CHALLENGE_STATS:
-
-                            List<ChallengeViewButtons> listChallengeViewButtons = Arrays.asList(new ChallengeViewButtons[]{ChallengeViewButtons.PAST_CHALLENGE_ALLIANCE_BANNER_FR, ChallengeViewButtons.PAST_CHALLENGE_HORDE_BANNER_FR, ChallengeViewButtons.PAST_CHALLENGE_LEGION_BANNER_FR});
-                            for (ChallengeViewButtons challengeViewButton : listChallengeViewButtons) {
-                                coreMechanics.challengeStats(windowInfo, discordWebClient, challengeViewButton);
-                            }
-                            break;
-
-                        case DONORS_STATS:
-                            coreMechanics.receivedRss(windowInfo, discordWebClient);
-                            break;
-
-                        case RSS_FARMING:
-                        default:
-                            coreMechanics.findAndFarm(marchConfig.getTargetRssLevel(), getRssTypeFromConfig(), windowInfo, hasEncampments);
-                            break;
-                    }
-
-                    availMarches--;
-                    firstRun = false;
-                    timeLastActionPerformed = System.currentTimeMillis();
-                }
-            }
-
-        } catch (AWTException | IOException | URISyntaxException | InterruptedException | TesseractException e) {
-            log.error("Error in main logic for window: {}", windowInfo.getTitle(), e);
+        } catch (InterruptedException e) {
+            log.error("Main thread interrupted during executor shutdown", e);
+            executorService.shutdownNow();
+            Thread.currentThread().interrupt();
         }
-    }
-
-    private RssType getRssTypeFromConfig() {
-
-        return switch (marchConfig.getRssType()) {
-            case "ALL" -> RssType.values()[random.nextInt(RssType.values().length)];
-            case "ALL_WO_WS" -> RssType.values()[random.nextInt(RssType.values().length - 1)];
-            default -> RssType.valueOf(marchConfig.getRssType());
-        };
     }
 
 }

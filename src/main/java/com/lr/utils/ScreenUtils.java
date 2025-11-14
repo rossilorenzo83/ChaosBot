@@ -32,22 +32,23 @@ public class ScreenUtils {
      * Return a string containing the filePath of the captured image
      *
      * @param windowInfo
+     * @param robot Robot instance to use for screen capture
      * @return
      * @throws AWTException
      * @throws IOException
      */
-    public static String takeScreenCapture(WinUtils.WindowInfo windowInfo) throws AWTException, IOException {
-        return takeScreenCapture(windowInfo, "");
+    public static String takeScreenCapture(WinUtils.WindowInfo windowInfo, Robot robot) throws AWTException, IOException {
+        return takeScreenCapture(windowInfo, "", robot);
     }
 
-    public static String takeScreenCapture(WinUtils.WindowInfo windowInfo, String postfix) throws AWTException, IOException {
+    public static String takeScreenCapture(WinUtils.WindowInfo windowInfo, String postfix, Robot robot) throws AWTException, IOException {
         Rectangle screenRect = new Rectangle(windowInfo.rect.left, windowInfo.rect.top, Math.abs(windowInfo.rect.right
                 - windowInfo.rect.left), Math.abs(windowInfo.rect.bottom - windowInfo.rect.top));
-        return takeScreenCapture(screenRect, windowInfo.title, postfix);
+        return takeScreenCapture(screenRect, windowInfo.title, postfix, robot);
     }
 
-    public static String takeScreenCapture(Rectangle rectangle, String winTitle, String postfix) throws AWTException, IOException {
-        BufferedImage capture = new Robot().createScreenCapture(rectangle);
+    public static String takeScreenCapture(Rectangle rectangle, String winTitle, String postfix, Robot robot) throws AWTException, IOException {
+        BufferedImage capture = robot.createScreenCapture(rectangle);
         String filePath = "tmp" + winTitle + postfix + ".jpg";
         ImageIO.write(capture, "jpg", new File(filePath));
         return filePath;
