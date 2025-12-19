@@ -158,6 +158,30 @@ public class WinUtils {
 
         int GetWindowThreadProcessId(WinDef.HWND hWnd, IntByReference pref);
 
+        boolean SetForegroundWindow(WinDef.HWND hWnd);
+
+        WinDef.HWND FindWindowA(String lpClassName, String lpWindowName);
+    }
+
+    /**
+     * Brings a window to the foreground by its title.
+     * @param windowTitle The title of the window to focus
+     * @return true if the window was found and brought to foreground
+     */
+    public static boolean focusWindow(String windowTitle) {
+        if (!IS_WINDOWS || User32.INSTANCE == null) {
+            return false;
+        }
+
+        try {
+            WinDef.HWND hwnd = User32.INSTANCE.FindWindowA(null, windowTitle);
+            if (hwnd != null) {
+                return User32.INSTANCE.SetForegroundWindow(hwnd);
+            }
+            return false;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     public interface Psapi extends StdCallLibrary {

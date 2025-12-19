@@ -10,8 +10,8 @@ import org.opencv.core.Mat;
 import org.opencv.imgcodecs.Imgcodecs;
 import org.springframework.web.reactive.function.client.WebClient;
 
-import java.awt.*;
 import java.awt.AWTException;
+import java.awt.Robot;
 import java.io.File;
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -102,7 +102,7 @@ public class WindowAutomationWorker implements Runnable {
         } catch (InterruptedException e) {
             log.info("Worker interrupted for window: {}", windowInfo.getTitle());
             Thread.currentThread().interrupt(); // Preserve interrupt status
-        } catch (AWTException | IOException | URISyntaxException | TesseractException e) {
+        } catch (AWTException | IOException | URISyntaxException e) {
             log.error("Fatal error in automation worker for window: {}", windowInfo.getTitle(), e);
 
         } finally {
@@ -186,17 +186,28 @@ public class WindowAutomationWorker implements Runnable {
     /**
      * Main processing loop for the window.
      * Loop continues until shutdown is requested or thread is interrupted.
+     *
+     * IMPORTANT: Action failures are caught and logged but don't terminate the loop.
+     * The worker will continue and retry on the next interval.
      */
-    private void processWindowLoop() throws AWTException, IOException, URISyntaxException, InterruptedException, TesseractException {
+    private void processWindowLoop() throws InterruptedException {
         log.info("Entering main processing loop for window: {}", windowInfo.getTitle());
 
         while (!shutdownRequested && !Thread.currentThread().isInterrupted()) {
             // Check if timer expired and reset marches
-            if (availMarches == 0 &&
-                (System.currentTimeMillis() - timeLastActionPerformed) > (marchConfig.getMarchesIntervalMins() * 60 * 1000)) {
-                log.info("Timer expired for window: {}. Resetting marches.", windowInfo.getTitle());
-                availMarches = marchConfig.getMarchesAvailable();
-                firstRun = true;
+            if (availMarches == 0) {
+                long elapsedMs = System.currentTimeMillis() - timeLastActionPerformed;
+                long intervalMs = marchConfig.getMarchesIntervalMins() * 60L * 1000L;
+
+                log.debug("Timer check for window: {} - elapsed: {}ms, interval: {}ms, remaining: {}ms",
+                    windowInfo.getTitle(), elapsedMs, intervalMs, intervalMs - elapsedMs);
+
+                if (elapsedMs > intervalMs) {
+                    log.info("Timer expired for window: {}. Resetting marches to {}.",
+                        windowInfo.getTitle(), marchConfig.getMarchesAvailable());
+                    availMarches = marchConfig.getMarchesAvailable();
+                    firstRun = true;
+                }
             }
 
             // Process actions if marches available
@@ -204,19 +215,51 @@ public class WindowAutomationWorker implements Runnable {
                 log.info("Processing action for window: {} (marches remaining: {})",
                     windowInfo.getTitle(), availMarches);
 
-                File tmpFolder = LoadLibs.extractTessResources("win32-x86-64");
-                log.info("Tesseract tmp folder path: {}", tmpFolder.getPath());
-                System.setProperty("java.library.path", tmpFolder.getPath());
+                try {
+                    File tmpFolder = LoadLibs.extractTessResources("win32-x86-64");
+                    log.debug("Tesseract tmp folder path: {}", tmpFolder.getPath());
+                    System.setProperty("java.library.path", tmpFolder.getPath());
 
-                performAction();
+                    performAction();
 
-                availMarches--;
-                firstRun = false;
-                timeLastActionPerformed = System.currentTimeMillis();
+                    // Only decrement marches and update time on SUCCESS
+                    availMarches--;
+                    firstRun = false;
+                    timeLastActionPerformed = System.currentTimeMillis();
+
+                    log.info("Action completed successfully for window: {}. Marches remaining: {}",
+                        windowInfo.getTitle(), availMarches);
+
+                } catch (InterruptedException e) {
+                    // Re-throw InterruptedException to allow graceful shutdown
+                    throw e;
+                } catch (Exception e) {
+                    // Catch ALL exceptions - loop must NEVER die from errors like:
+                    // ImageNotMatchedException, template not found, coords not found, etc.
+                    log.warn("Action failed for window: {}. Will retry on next interval. Error: {} - {}",
+                        windowInfo.getTitle(), e.getClass().getSimpleName(), e.getMessage());
+
+                    // Still decrement marches to prevent infinite retry loop
+                    availMarches--;
+                    timeLastActionPerformed = System.currentTimeMillis();
+
+                    // Small delay before continuing to avoid rapid failure loops
+                    Thread.sleep(generalConfig.getActionIntervalMs());
+                }
             }
 
             // Small sleep to prevent tight loop when no marches available
             if (availMarches == 0) {
+                // Log status every 5 minutes to confirm loop is running
+                long elapsedMs = System.currentTimeMillis() - timeLastActionPerformed;
+                long intervalMs = marchConfig.getMarchesIntervalMins() * 60L * 1000L;
+                long remainingSec = (intervalMs - elapsedMs) / 1000;
+
+                if (remainingSec % 300 == 0 && remainingSec >= 0) {
+                    log.info("Waiting for timer reset on window: {}. {} minutes remaining until next action cycle.",
+                        windowInfo.getTitle(), remainingSec / 60);
+                }
+
                 Thread.sleep(1000); // Check every second for timer expiration
             }
         }
@@ -235,6 +278,12 @@ public class WindowAutomationWorker implements Runnable {
 
     /**
      * Perform the configured action type.
+     *
+     * NOTE: Global automation lock is now acquired INSIDE CoreMechanics methods,
+     * only during actual mouse/keyboard operations. This allows parallel execution of:
+     * - Screen captures (each thread has its own Robot)
+     * - Image processing and template matching
+     * Only mouse movements and clicks are serialized.
      */
     private void performAction() throws AWTException, IOException, URISyntaxException, InterruptedException, TesseractException {
         switch (generalConfig.getActionType()) {

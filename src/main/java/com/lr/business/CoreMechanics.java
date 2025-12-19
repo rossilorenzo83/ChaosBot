@@ -44,11 +44,28 @@ public class CoreMechanics {
     public static final int SCROLL_AMOUNT = 20;
 
     /**
-     * Lock for window focus operations to prevent multiple threads from interfering with each other's window focus.
-     * Windows can only have one focused window at a time.
-     * This lock ensures atomic window-focus + action sequences across all worker threads.
+     * Global lock for ALL automation operations.
+     *
+     * CRITICAL: Even with separate Robot instances per thread, there is only ONE physical
+     * mouse cursor on the system. All Robot.mouseMove() calls control the same cursor.
+     *
+     * This lock ensures that entire automation sequences (find -> click -> wait -> verify)
+     * are executed atomically without interference from other threads.
+     *
+     * Without this, Thread A might:
+     *   1. Move mouse to Window A button
+     *   2. [Thread B moves mouse to Window B]  <-- RACE CONDITION
+     *   3. Click (now clicking wrong location!)
      */
-    private final Object windowFocusLock = new Object();
+    private final Object globalAutomationLock = new Object();
+
+    /**
+     * Gets the global automation lock for serializing multi-window operations.
+     * Workers must acquire this lock before performing any automation sequence.
+     */
+    public Object getGlobalAutomationLock() {
+        return globalAutomationLock;
+    }
 
     /**
      * Lock for thread-safe initialization of mainMapButtonsCoordsMap.
@@ -90,8 +107,16 @@ public class CoreMechanics {
 
 
     public void findAndFarm(String rssLevel, RssType rssType, WinUtils.WindowInfo windowInfo, boolean hasEncampment, Robot robot) throws InterruptedException, AWTException, IOException, URISyntaxException {
+        // Acquire global lock - only one window can control mouse at a time
+        synchronized (globalAutomationLock) {
+            findAndFarmInternal(rssLevel, rssType, windowInfo, hasEncampment, robot);
+        }
+    }
 
-        //gotoMainMap with keystroke
+    private void findAndFarmInternal(String rssLevel, RssType rssType, WinUtils.WindowInfo windowInfo, boolean hasEncampment, Robot robot) throws InterruptedException, AWTException, IOException, URISyntaxException {
+        // Focus window first - critical when switching between multiple game instances
+        focusAndPrepareWindow(windowInfo, robot);
+
         Map<MainMapButtons, Double[]> windowCoords = mainMapButtonsCoordsMap.get(windowInfo.getTitle());
         if (windowCoords == null) {
             throw new IllegalStateException("No coordinates found for window: " + windowInfo.getTitle());
@@ -230,6 +255,15 @@ public class CoreMechanics {
     }
 
     public void armyFarming(String armyLvl, int armyPreset, WinUtils.WindowInfo windowInfo, boolean hasEncampment, Boolean isSkelly, Boolean isFirstRun, Robot robot) throws IOException, AWTException, InterruptedException, URISyntaxException {
+        // Acquire global lock - only one window can control mouse at a time
+        synchronized (globalAutomationLock) {
+            armyFarmingInternal(armyLvl, armyPreset, windowInfo, hasEncampment, isSkelly, isFirstRun, robot);
+        }
+    }
+
+    private void armyFarmingInternal(String armyLvl, int armyPreset, WinUtils.WindowInfo windowInfo, boolean hasEncampment, Boolean isSkelly, Boolean isFirstRun, Robot robot) throws IOException, AWTException, InterruptedException, URISyntaxException {
+        // Focus window first - critical when switching between multiple game instances
+        focusAndPrepareWindow(windowInfo, robot);
 
         Map<MainMapButtons, Double[]> windowCoords = mainMapButtonsCoordsMap.get(windowInfo.getTitle());
         if (windowCoords == null) {
@@ -372,17 +406,20 @@ public class CoreMechanics {
     }
 
     public void challengeStats(WinUtils.WindowInfo windowInfo, WebClient discordWebClient, ChallengeViewButtons challengeViewButtons, Robot robot) throws IOException, AWTException, URISyntaxException, InterruptedException, TesseractException {
+        // Acquire global lock - only one window can control mouse at a time
+        synchronized (globalAutomationLock) {
+            challengeStatsInternal(windowInfo, discordWebClient, challengeViewButtons, robot);
+        }
+    }
 
-        //Get focus
-        moveAndClick(findWindowCenterCoords(windowInfo), robot);
-
+    private void challengeStatsInternal(WinUtils.WindowInfo windowInfo, WebClient discordWebClient, ChallengeViewButtons challengeViewButtons, Robot robot) throws IOException, AWTException, URISyntaxException, InterruptedException, TesseractException {
+        // Focus window first - critical when switching between multiple game instances
+        focusAndPrepareWindow(windowInfo, robot);
 
         try {
-            synchronized (windowFocusLock) {
-                robot.keyPress(KeyEvent.VK_D);
-                robot.keyRelease(KeyEvent.VK_D);
-                Thread.sleep(generalConfig.getActionIntervalMs());
-            }
+            robot.keyPress(KeyEvent.VK_D);
+            robot.keyRelease(KeyEvent.VK_D);
+            Thread.sleep(generalConfig.getActionIntervalMs());
 
             String challengePage = takeScreenCapture(windowInfo, robot);
             Mat locationSelectionScreen = Imgcodecs.imread(challengePage, CONVERT_IMG_FLAG);
@@ -395,10 +432,8 @@ public class CoreMechanics {
             Mat pastChallengeCurrentPageMat = pastChallengePageMat;
 
             Double[] bottomCoords = findWindowBottomCoords(windowInfo);
-            synchronized (windowFocusLock) {
-                robot.mouseMove(bottomCoords[0].intValue(), bottomCoords[1].intValue());
-                Thread.sleep(generalConfig.getActionIntervalMs());
-            }
+            robot.mouseMove(bottomCoords[0].intValue(), bottomCoords[1].intValue());
+            Thread.sleep(generalConfig.getActionIntervalMs());
 
             int mainScrollCounter = 0;
             boolean prevNotFound;
@@ -433,21 +468,15 @@ public class CoreMechanics {
                     do {
 
                         bottomCoords = findWindowBottomCoords(windowInfo);
-                        synchronized (windowFocusLock) {
-                            robot.mouseMove(bottomCoords[0].intValue(), bottomCoords[1].intValue());
-                            Thread.sleep(generalConfig.getActionIntervalMs());
-                        }
-
+                        robot.mouseMove(bottomCoords[0].intValue(), bottomCoords[1].intValue());
+                        Thread.sleep(generalConfig.getActionIntervalMs());
 
                         challengeScorersScreenCapture = challengeScorersCurrentScreenCapture;
 
                         contextText.append(ScreenUtils.extractTextFromImage(challengeScorersScreenCapturePath, ocrEngine));
 
-
-                        synchronized (windowFocusLock) {
-                            robot.mouseWheel(3);
-                            Thread.sleep(generalConfig.getActionIntervalMs());
-                        }
+                        robot.mouseWheel(3);
+                        Thread.sleep(generalConfig.getActionIntervalMs());
 
                         scrollCounter++;
                         String challengeScorersCurrentScreenCapturePath = takeScreenCapture(windowInfo, "scores" + scrollCounter, robot);
@@ -463,15 +492,13 @@ public class CoreMechanics {
                     publishContentOnDiscord(discordWebClient, discordRestbuilder);
 
 
-                    synchronized (windowFocusLock) {
-                        robot.keyPress(VK_ESCAPE);
-                        robot.keyRelease(VK_ESCAPE);
-                        Thread.sleep(generalConfig.getActionIntervalMs());
+                    robot.keyPress(VK_ESCAPE);
+                    robot.keyRelease(VK_ESCAPE);
+                    Thread.sleep(generalConfig.getActionIntervalMs());
 
-                        robot.keyPress(VK_ESCAPE);
-                        robot.keyRelease(VK_ESCAPE);
-                        Thread.sleep(generalConfig.getActionIntervalMs());
-                    }
+                    robot.keyPress(VK_ESCAPE);
+                    robot.keyRelease(VK_ESCAPE);
+                    Thread.sleep(generalConfig.getActionIntervalMs());
                     prevNotFound = false;
 
 
@@ -485,10 +512,8 @@ public class CoreMechanics {
                 log.info("Arrived at {} scrolls", mainScrollCounter);
                 //Scroll
                 bottomCoords = findWindowBottomCoords(windowInfo);
-                synchronized (windowFocusLock) {
-                    robot.mouseMove(bottomCoords[0].intValue(), bottomCoords[1].intValue());
-                    Thread.sleep(generalConfig.getActionIntervalMs());
-                }
+                robot.mouseMove(bottomCoords[0].intValue(), bottomCoords[1].intValue());
+                Thread.sleep(generalConfig.getActionIntervalMs());
 
                 proceedScrolling(mainScrollCounter, prevNotFound, robot);
 
@@ -498,11 +523,9 @@ public class CoreMechanics {
             while (mainScrollCounter < SCROLL_AMOUNT);
 
             //Get back to map screen
-            synchronized (windowFocusLock) {
-                robot.keyPress(VK_ESCAPE);
-                robot.keyRelease(VK_ESCAPE);
-                Thread.sleep(generalConfig.getActionIntervalMs());
-            }
+            robot.keyPress(VK_ESCAPE);
+            robot.keyRelease(VK_ESCAPE);
+            Thread.sleep(generalConfig.getActionIntervalMs());
 
         } catch (ImageNotMatchedException e) {
             log.error("Error in challengeStats: {}", e.getMessage());
@@ -526,21 +549,28 @@ public class CoreMechanics {
     }
 
     private void proceedScrolling(int mainScrollCounter, boolean prevNotFound, Robot robot) throws InterruptedException, AWTException {
-        synchronized (windowFocusLock) {
-            if (prevNotFound) {
+        if (prevNotFound) {
+            robot.mouseWheel(1);
+            Thread.sleep(generalConfig.getActionIntervalMs());
+        } else {
+            log.info("Scrolling {} times", mainScrollCounter);
+            for (int i = 0; i < mainScrollCounter; i++) {
                 robot.mouseWheel(1);
                 Thread.sleep(generalConfig.getActionIntervalMs());
-            } else {
-                log.info("Scrolling {} times", mainScrollCounter);
-                for (int i = 0; i < mainScrollCounter; i++) {
-                    robot.mouseWheel(1);
-                    Thread.sleep(generalConfig.getActionIntervalMs());
-                }
             }
         }
     }
 
     public void receivedRss(WinUtils.WindowInfo windowInfo, WebClient discordWebClient, Robot robot) throws InterruptedException, IOException, AWTException, URISyntaxException, TesseractException {
+        // Acquire global lock - only one window can control mouse at a time
+        synchronized (globalAutomationLock) {
+            receivedRssInternal(windowInfo, discordWebClient, robot);
+        }
+    }
+
+    private void receivedRssInternal(WinUtils.WindowInfo windowInfo, WebClient discordWebClient, Robot robot) throws InterruptedException, IOException, AWTException, URISyntaxException, TesseractException {
+        // Focus window first - critical when switching between multiple game instances
+        focusAndPrepareWindow(windowInfo, robot);
 
         try {
             Map<MainMapButtons, Double[]> windowCoords = mainMapButtonsCoordsMap.get(windowInfo.getTitle());
@@ -595,12 +625,9 @@ public class CoreMechanics {
                     log.info("Text extracted: {}", contextText);
                     discordRestbuilder.part("content", contextText.toString());
 
-
-                    synchronized (windowFocusLock) {
-                        robot.keyPress(VK_ESCAPE);
-                        robot.keyRelease(VK_ESCAPE);
-                        Thread.sleep(generalConfig.getActionIntervalMs());
-                    }
+                    robot.keyPress(VK_ESCAPE);
+                    robot.keyRelease(VK_ESCAPE);
+                    Thread.sleep(generalConfig.getActionIntervalMs());
                     prevNotFound = false;
 
                     publishContentOnDiscord(discordWebClient, discordRestbuilder);
@@ -622,11 +649,9 @@ public class CoreMechanics {
             while (mainScrollCounter < SCROLL_AMOUNT);
 
             //Get back to map screen
-            synchronized (windowFocusLock) {
-                robot.keyPress(VK_ESCAPE);
-                robot.keyRelease(VK_ESCAPE);
-                Thread.sleep(generalConfig.getActionIntervalMs());
-            }
+            robot.keyPress(VK_ESCAPE);
+            robot.keyRelease(VK_ESCAPE);
+            Thread.sleep(generalConfig.getActionIntervalMs());
 
         } catch (ImageNotMatchedException e) {
             log.error("Error in receivedRss: {}", e.getMessage());
@@ -660,34 +685,48 @@ public class CoreMechanics {
     }
 
     /**
-     * Move mouse to coordinates and click with window focus lock.
-     * The lock ensures that window focus + click operations are atomic and not interrupted by other threads.
+     * Focus on the target window before performing automation.
+     * This ensures clicks go to the correct window when switching between multiple game instances.
+     */
+    private void focusAndPrepareWindow(WinUtils.WindowInfo windowInfo, Robot robot) throws InterruptedException, AWTException {
+        // Use Windows API to bring window to foreground
+        boolean focused = WinUtils.focusWindow(windowInfo.getTitle());
+        log.debug("Window focus attempt for '{}': {}", windowInfo.getTitle(), focused ? "success" : "failed (will click to focus)");
+
+        // Always click on window center to ensure focus (belt and suspenders approach)
+        Double[] centerCoords = findWindowCenterCoords(windowInfo);
+        robot.mouseMove(centerCoords[0].intValue(), centerCoords[1].intValue());
+        Thread.sleep(50);
+        robot.mousePress(BUTTON1_DOWN_MASK);
+        robot.mouseRelease(BUTTON1_DOWN_MASK);
+        Thread.sleep(100); // Wait for window to receive focus
+    }
+
+    /**
+     * Move mouse to coordinates and click.
+     * Called from within synchronized methods - lock is already held.
      */
     private void moveAndClick(Double[] coords, Robot robot) throws InterruptedException, AWTException {
-        synchronized (windowFocusLock) {
-            robot.mouseMove(coords[0].intValue(), coords[1].intValue());
-            Thread.sleep(50); // Small delay to ensure window receives focus
-            robot.mousePress(BUTTON1_DOWN_MASK);
-            robot.mouseRelease(BUTTON1_DOWN_MASK);
-            Thread.sleep(generalConfig.getActionIntervalMs());
-        }
+        robot.mouseMove(coords[0].intValue(), coords[1].intValue());
+        Thread.sleep(50); // Small delay to ensure window receives focus
+        robot.mousePress(BUTTON1_DOWN_MASK);
+        robot.mouseRelease(BUTTON1_DOWN_MASK);
+        Thread.sleep(generalConfig.getActionIntervalMs());
     }
 
 
     private void goBackToMainMap(Robot robot) throws InterruptedException, AWTException {
         log.info("Attempting to return to main map screen");
 
-        synchronized (windowFocusLock) {
-            // Press ESC multiple times to ensure we get back to main map from any nested screen
-            for (int i = 0; i < 3; i++) {
-                robot.keyPress(VK_ESCAPE);
-                robot.keyRelease(VK_ESCAPE);
-                Thread.sleep(500); // Short delay between key presses
-            }
-
-            // Longer delay to allow UI transitions to complete
-            Thread.sleep(generalConfig.getActionIntervalMs() * 2);
+        // Press ESC multiple times to ensure we get back to main map from any nested screen
+        for (int i = 0; i < 3; i++) {
+            robot.keyPress(VK_ESCAPE);
+            robot.keyRelease(VK_ESCAPE);
+            Thread.sleep(500); // Short delay between key presses
         }
+
+        // Longer delay to allow UI transitions to complete
+        Thread.sleep(generalConfig.getActionIntervalMs() * 2);
 
         log.info("Returned to main map screen");
     }
@@ -710,15 +749,13 @@ public class CoreMechanics {
 
         // Position mouse over the resource list area and ensure it's focused
         Double[] resourceListCoords = findResourceListScrollPosition(windowInfo);
-        synchronized (windowFocusLock) {
-            robot.mouseMove(resourceListCoords[0].intValue(), resourceListCoords[1].intValue());
-            Thread.sleep(generalConfig.getActionIntervalMs());
+        robot.mouseMove(resourceListCoords[0].intValue(), resourceListCoords[1].intValue());
+        Thread.sleep(generalConfig.getActionIntervalMs());
 
-            // Click to ensure the scrollable area has focus
-            robot.mousePress(BUTTON1_DOWN_MASK);
-            robot.mouseRelease(BUTTON1_DOWN_MASK);
-            Thread.sleep(generalConfig.getActionIntervalMs());
-        }
+        // Click to ensure the scrollable area has focus
+        robot.mousePress(BUTTON1_DOWN_MASK);
+        robot.mouseRelease(BUTTON1_DOWN_MASK);
+        Thread.sleep(generalConfig.getActionIntervalMs());
 
         // Scroll down to find warpstone (primary direction based on user feedback)
         return performWarpstoneScroll(windowInfo, 1, "down", 8, robot);
@@ -748,10 +785,8 @@ public class CoreMechanics {
         
         for (int scrollCount = 0; scrollCount < maxScrolls; scrollCount++) {
             // Perform scroll using same pattern as successful scroll methods
-            synchronized (windowFocusLock) {
-                robot.mouseWheel(wheelDirection);
-                Thread.sleep(generalConfig.getActionIntervalMs()); // Use same delay as working methods
-            }
+            robot.mouseWheel(wheelDirection);
+            Thread.sleep(generalConfig.getActionIntervalMs()); // Use same delay as working methods
 
             // Take screenshot after scroll
             String searchViewPath = takeScreenCapture(windowInfo, robot);

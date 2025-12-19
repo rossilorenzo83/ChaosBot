@@ -311,6 +311,197 @@ class WindowAutomationWorkerIT {
     }
 
     /**
+     * CRITICAL TEST: Verifies that the worker loop continues even when individual actions fail.
+     * This test covers the bug where exceptions in performAction() would terminate the entire worker.
+     *
+     * Note: This test uses a TestableWindowAutomationWorker subclass that bypasses initialization
+     * to directly test the loop behavior.
+     */
+    @Test
+    @Timeout(10)
+    void shouldContinueLoopWhenActionFails() throws Exception {
+        // Given
+        WinUtils.WindowInfo windowInfo = createMockWindowInfo("TestWindow");
+
+        // Configure marches to be available so actions will be attempted
+        when(marchConfig.getMarchesAvailable()).thenReturn(3);
+        when(marchConfig.getMarchesIntervalMins()).thenReturn(1L); // 1 minute interval
+        when(marchConfig.getRssType()).thenReturn("IRON"); // Needed for getRssTypeFromConfig()
+        when(marchConfig.getTargetRssLevel()).thenReturn("5");
+        when(generalConfig.getActionIntervalMs()).thenReturn(50L); // Short interval for test
+        when(generalConfig.getActionType()).thenReturn(ActionType.RSS_FARMING);
+        when(generalConfig.getImageQualityLowerBound()).thenReturn(0.7);
+
+        // Track how many times actions were attempted
+        AtomicInteger actionAttempts = new AtomicInteger(0);
+
+        // Mock CoreMechanics to track calls AND throw exception
+        // This simulates failures like ImageNotMatchedException, IOExceptions, etc.
+        doAnswer(invocation -> {
+            System.out.println("findAndFarm mock invoked! Args: " + java.util.Arrays.toString(invocation.getArguments()));
+            actionAttempts.incrementAndGet();
+            throw new java.io.IOException("Simulated action failure");
+        }).when(coreMechanics).findAndFarm(anyString(), any(RssType.class), any(WinUtils.WindowInfo.class), anyBoolean(), any());
+
+        // Mock the global automation lock
+        Object mockLock = new Object();
+        when(coreMechanics.getGlobalAutomationLock()).thenReturn(mockLock);
+
+        // Mock coords map to allow initialization to proceed
+        java.util.concurrent.ConcurrentMap<String, java.util.Map<MainMapButtons, Double[]>> coordsMap =
+            new java.util.concurrent.ConcurrentHashMap<>();
+        coordsMap.put("TestWindow", new java.util.HashMap<>());
+        when(coreMechanics.getMainMapButtonsCoordsMap()).thenReturn(coordsMap);
+        when(coreMechanics.getCoordsMapInitLock()).thenReturn(new Object());
+
+        // Create a testable worker that skips initialization
+        TestableWindowAutomationWorker worker = new TestableWindowAutomationWorker(
+            windowInfo, coreMechanics, generalConfig, marchConfig,
+            discordWebClient, random, robotFactory
+        );
+
+        CountDownLatch workerFinished = new CountDownLatch(1);
+
+        Thread workerThread = new Thread(() -> {
+            try {
+                worker.run();
+            } finally {
+                workerFinished.countDown();
+            }
+        });
+
+        // When
+        workerThread.start();
+
+        // Wait long enough for multiple action attempts (3 marches = 3 attempts)
+        Thread.sleep(500);
+
+        // Request shutdown
+        worker.requestShutdown();
+
+        boolean finished = workerFinished.await(3, TimeUnit.SECONDS);
+
+        // Then
+        assertTrue(finished, "Worker should terminate after shutdown request");
+
+        // CRITICAL: All 3 marches should have been attempted despite failures
+        assertEquals(3, actionAttempts.get(),
+            "All marches should be attempted even when actions fail. " +
+            "Loop should NOT terminate on first exception!");
+    }
+
+    /**
+     * Verifies that the worker resets marches after the interval expires and continues processing.
+     */
+    @Test
+    @Timeout(15)
+    void shouldResetMarchesAfterIntervalExpires() throws Exception {
+        // Given
+        WinUtils.WindowInfo windowInfo = createMockWindowInfo("TestWindow");
+
+        // Configure only 1 march initially with very short reset interval
+        when(marchConfig.getMarchesAvailable()).thenReturn(1);
+        when(marchConfig.getMarchesIntervalMins()).thenReturn(0L); // 0 minutes = immediate reset for testing
+        when(marchConfig.getRssType()).thenReturn("IRON");
+        when(marchConfig.getTargetRssLevel()).thenReturn("5");
+        when(generalConfig.getActionIntervalMs()).thenReturn(50L);
+        when(generalConfig.getActionType()).thenReturn(ActionType.RSS_FARMING);
+        when(generalConfig.getImageQualityLowerBound()).thenReturn(0.7);
+
+        AtomicInteger actionAttempts = new AtomicInteger(0);
+        Object mockLock = new Object();
+        when(coreMechanics.getGlobalAutomationLock()).thenReturn(mockLock);
+
+        // Mock coords map to allow initialization to proceed
+        java.util.concurrent.ConcurrentMap<String, java.util.Map<MainMapButtons, Double[]>> coordsMap =
+            new java.util.concurrent.ConcurrentHashMap<>();
+        coordsMap.put("TestWindow", new java.util.HashMap<>());
+        when(coreMechanics.getMainMapButtonsCoordsMap()).thenReturn(coordsMap);
+        when(coreMechanics.getCoordsMapInitLock()).thenReturn(new Object());
+
+        // Count action attempts but don't throw to allow march counter to work
+        doAnswer(invocation -> {
+            System.out.println("findAndFarm mock invoked for reset test!");
+            actionAttempts.incrementAndGet();
+            return null;
+        }).when(coreMechanics).findAndFarm(anyString(), any(RssType.class), any(WinUtils.WindowInfo.class), anyBoolean(), any());
+
+        // Create a testable worker that skips initialization
+        TestableWindowAutomationWorker worker = new TestableWindowAutomationWorker(
+            windowInfo, coreMechanics, generalConfig, marchConfig,
+            discordWebClient, random, robotFactory
+        );
+
+        CountDownLatch workerFinished = new CountDownLatch(1);
+
+        Thread workerThread = new Thread(() -> {
+            try {
+                worker.run();
+            } finally {
+                workerFinished.countDown();
+            }
+        });
+
+        // When
+        workerThread.start();
+
+        // Wait long enough for march to complete, interval to expire, and marches to reset
+        Thread.sleep(2000);
+
+        worker.requestShutdown();
+        boolean finished = workerFinished.await(3, TimeUnit.SECONDS);
+
+        // Then
+        assertTrue(finished, "Worker should terminate after shutdown request");
+        assertTrue(actionAttempts.get() >= 2,
+            "Should have attempted actions multiple times after march reset. " +
+            "Actual attempts: " + actionAttempts.get());
+    }
+
+    /**
+     * Testable subclass that skips the initialization phase which requires real screen capture.
+     * This allows us to directly test the processing loop behavior.
+     */
+    private static class TestableWindowAutomationWorker extends WindowAutomationWorker {
+        private Robot mockRobot;
+
+        public TestableWindowAutomationWorker(
+                WinUtils.WindowInfo windowInfo,
+                CoreMechanics coreMechanics,
+                GeneralConfig generalConfig,
+                MarchConfig marchConfig,
+                WebClient discordWebClient,
+                Random random,
+                Beans.RobotFactory robotFactory) {
+            super(windowInfo, coreMechanics, generalConfig, marchConfig, discordWebClient, random, robotFactory);
+            try {
+                this.mockRobot = robotFactory.createRobot();
+            } catch (Exception e) {
+                // Use a mock if factory fails
+                this.mockRobot = mock(Robot.class);
+            }
+        }
+
+        @Override
+        public void run() {
+            // Skip initialization and go directly to the processing loop
+            try {
+                // Use reflection to call processWindowLoop directly
+                java.lang.reflect.Method method = WindowAutomationWorker.class.getDeclaredMethod("processWindowLoop");
+                method.setAccessible(true);
+                method.invoke(this);
+            } catch (java.lang.reflect.InvocationTargetException e) {
+                if (e.getCause() instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                }
+                // Other exceptions are expected during testing
+            } catch (Exception e) {
+                // Ignore other reflection errors in test
+            }
+        }
+    }
+
+    /**
      * Helper method to create mock WindowInfo
      */
     private WinUtils.WindowInfo createMockWindowInfo(String title) {
