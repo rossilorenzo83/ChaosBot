@@ -1,6 +1,7 @@
 package com.lr.business;
 
 import com.lr.config.GeneralConfig;
+import com.lr.utils.WindowInputService;
 import com.lr.utils.WinUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,11 +35,14 @@ class CoreMechanicsThreadSafetyIT {
     @Mock
     private ResourceLoader resourceLoader;
 
+    @Mock
+    private WindowInputService windowInputService;
+
     private CoreMechanics coreMechanics;
 
     @BeforeEach
     void setUp() {
-        coreMechanics = new CoreMechanics(ocrEngine, generalConfig, resourceLoader);
+        coreMechanics = new CoreMechanics(ocrEngine, generalConfig, resourceLoader, windowInputService);
     }
 
     @Test

@@ -132,14 +132,15 @@ public class WinUtils {
             // Return a dummy WindowInfo on non-Windows platforms
             return new WindowInfo(new RECT(), "dummy");
         }
-        
+
         try {
             RECT r = new RECT();
             User32.INSTANCE.GetWindowRect(hWnd, r);
             char[] buffer = new char[1024];
             User32.INSTANCE.GetWindowText(hWnd, buffer, buffer.length);
             String title = Native.toString(buffer);
-            WindowInfo info = new WindowInfo(r, title);
+            // Store HWND for SendMessage/PostMessage operations
+            WindowInfo info = new WindowInfo(r, title, hWnd);
             return info;
         } catch (Exception e) {
             // Return a dummy WindowInfo if any Windows-specific operation fails
@@ -223,12 +224,19 @@ public class WinUtils {
     }
 
     public static class WindowInfo {
-        RECT rect;
-        String title;
+        private final RECT rect;
+        private final String title;
+        private final WinDef.HWND hwnd;
 
-        public WindowInfo(RECT rect, String title) {
+        public WindowInfo(RECT rect, String title, WinDef.HWND hwnd) {
             this.rect = rect;
             this.title = title;
+            this.hwnd = hwnd;
+        }
+
+        // Backward compatibility constructor for non-Windows platforms
+        public WindowInfo(RECT rect, String title) {
+            this(rect, title, null);
         }
 
         public String getTitle() {
@@ -239,8 +247,13 @@ public class WinUtils {
             return rect;
         }
 
+        public WinDef.HWND getHwnd() {
+            return hwnd;
+        }
+
         public String toString() {
-            return String.format("(%d,%d)-(%d,%d) : \"%s\"", rect.left, rect.top, rect.right, rect.bottom, title);
+            return String.format("(%d,%d)-(%d,%d) : \"%s\" [hwnd=%s]",
+                rect.left, rect.top, rect.right, rect.bottom, title, hwnd);
         }
     }
 }

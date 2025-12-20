@@ -11,9 +11,7 @@ import org.opencv.imgcodecs.Imgcodecs;
 import org.springframework.core.io.ClassPathResource;
 
 import javax.imageio.ImageIO;
-import java.awt.*;
 import java.awt.image.BufferedImage;
-import java.awt.image.DataBufferByte;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -29,28 +27,22 @@ public class ScreenUtils {
 
 
     /**
-     * Return a string containing the filePath of the captured image
+     * Return a string containing the filePath of the captured image.
+     * Uses JNA PrintWindow to capture window without requiring focus.
      *
-     * @param windowInfo
-     * @param robot Robot instance to use for screen capture
-     * @return
-     * @throws AWTException
-     * @throws IOException
+     * @param windowInfo Window information including HWND
+     * @param inputService WindowInputService for capturing
+     * @return File path of the captured image
+     * @throws IOException If image cannot be written
      */
-    public static String takeScreenCapture(WinUtils.WindowInfo windowInfo, Robot robot) throws AWTException, IOException {
-        return takeScreenCapture(windowInfo, "", robot);
+    public static String takeScreenCapture(WinUtils.WindowInfo windowInfo, WindowInputService inputService) throws IOException {
+        return takeScreenCapture(windowInfo, "", inputService);
     }
 
-    public static String takeScreenCapture(WinUtils.WindowInfo windowInfo, String postfix, Robot robot) throws AWTException, IOException {
-        Rectangle screenRect = new Rectangle(windowInfo.rect.left, windowInfo.rect.top, Math.abs(windowInfo.rect.right
-                - windowInfo.rect.left), Math.abs(windowInfo.rect.bottom - windowInfo.rect.top));
-        return takeScreenCapture(screenRect, windowInfo.title, postfix, robot);
-    }
-
-    public static String takeScreenCapture(Rectangle rectangle, String winTitle, String postfix, Robot robot) throws AWTException, IOException {
-        BufferedImage capture = robot.createScreenCapture(rectangle);
-        String filePath = "tmp" + winTitle + postfix + ".jpg";
-        ImageIO.write(capture, "jpg", new File(filePath));
+    public static String takeScreenCapture(WinUtils.WindowInfo windowInfo, String postfix, WindowInputService inputService) throws IOException {
+        BufferedImage capture = inputService.captureWindow(windowInfo.getHwnd());
+        String filePath = "tmp" + windowInfo.getTitle() + postfix + ".png";
+        ImageIO.write(capture, "png", new File(filePath));
         return filePath;
     }
 
