@@ -133,10 +133,22 @@
                         <format>JSON</format>
                     </formats>
                     <prettyPrint>true</prettyPrint>
+                    <!-- NVD API Configuration (NIST) -->
+                    <nvdApiKey>${nvdApiKey}</nvdApiKey>
+                    <nvdMaxRetryCount>10</nvdMaxRetryCount>
+                    <nvdApiDelay>2000</nvdApiDelay>
+                    <nvdValidForHours>24</nvdValidForHours>
+                    <!-- OSS Index Configuration (Sonatype) -->
+                    <ossIndexUsername>${ossIndexUsername}</ossIndexUsername>
+                    <ossIndexPassword>${ossIndexPassword}</ossIndexPassword>
                     <!-- Performance optimizations -->
                     <dataDirectory>~/.dependency-check/data</dataDirectory>
                     <connectionTimeout>60000</connectionTimeout>
                     <readTimeout>60000</readTimeout>
+                    <!-- Fallback configuration for when NVD is unavailable -->
+                    <enableExperimental>false</enableExperimental>
+                    <enableRetired>false</enableRetired>
+                    <centralAnalyzerEnabled>true</centralAnalyzerEnabled>
                     <!-- Skip scopes that are less critical for security -->
                     <skipProvidedScope>true</skipProvidedScope>
                     <skipRuntimeScope>true</skipRuntimeScope>
@@ -168,7 +180,8 @@
                     <cpanfileAnalyzerEnabled>false</cpanfileAnalyzerEnabled>
                     <mavenInstallAnalyzerEnabled>false</mavenInstallAnalyzerEnabled>
                     <mavenDepShieldAnalyzerEnabled>false</mavenDepShieldAnalyzerEnabled>
-                    <ossIndexAnalyzerEnabled>false</ossIndexAnalyzerEnabled>
+                    <!-- OSS Index now working with correct case-sensitive credentials -->
+                    <ossIndexAnalyzerEnabled>true</ossIndexAnalyzerEnabled>
                     <snykAnalyzerEnabled>false</snykAnalyzerEnabled>
                     <nexusAnalyzerEnabled>false</nexusAnalyzerEnabled>
                     <artifactoryAnalyzerEnabled>false</artifactoryAnalyzerEnabled>

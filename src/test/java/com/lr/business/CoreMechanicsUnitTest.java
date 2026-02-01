@@ -24,9 +24,6 @@ import static org.mockito.Mockito.*;
 class CoreMechanicsUnitTest {
 
     @Mock
-    private Robot robot;
-
-    @Mock
     private net.sourceforge.tess4j.Tesseract ocrEngine;
 
     @Mock
@@ -41,9 +38,9 @@ class CoreMechanicsUnitTest {
     private CoreMechanics coreMechanics;
 
     @BeforeEach
-    void setUp() {
-        coreMechanics = new CoreMechanics(robot, ocrEngine, generalConfig, resourceLoader);
-        
+    void setUp() throws Exception {
+        coreMechanics = new CoreMechanics(ocrEngine, generalConfig, resourceLoader);
+
         // Initialize the mainMapButtonsCoordsMap since it's not initialized in constructor
         ConcurrentMap<String, java.util.Map<MainMapButtons, Double[]>> testMap = new ConcurrentHashMap<>();
         coreMechanics.setMainMapButtonsCoordsMap(testMap);

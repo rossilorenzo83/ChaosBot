@@ -36,47 +36,63 @@ public class Beans {
         this.generalConfig = generalConfig;
     }
 
+    /**
+     * Robot factory method for creating per-thread Robot instances.
+     * Each thread should create its own Robot to avoid concurrency issues.
+     *
+     * NOTE: This is NOT a @Bean - Robot instances must be created per-thread, not as singleton.
+     * Use RobotFactory bean to create Robot instances.
+     */
     @Bean
-    @ConditionalOnMissingBean(Robot.class)
-    public Robot sharedRobot() throws AWTException {
-        // Log environment variables for debugging
-        String display = System.getenv("DISPLAY");
-        String javaAwtHeadless = System.getProperty("java.awt.headless");
-        boolean isHeadless = GraphicsEnvironment.isHeadless();
-        String osName = System.getProperty("os.name", "").toLowerCase();
+    public RobotFactory robotFactory() {
+        return new RobotFactory();
+    }
 
-        log.info("Environment check - DISPLAY: {}, java.awt.headless: {}, GraphicsEnvironment.isHeadless(): {}, OS: {}",
-                display, javaAwtHeadless, isHeadless, osName);
+    /**
+     * Factory class for creating Robot instances with proper headless detection
+     */
+    public static class RobotFactory {
 
-        // Better headless detection logic
-        boolean canCreateRealRobot = false;
-        
-        if (osName.contains("windows")) {
-            // Windows: check if we have a GUI (not headless)
-            canCreateRealRobot = !isHeadless;
-        } else {
-            // Linux/Unix: check if DISPLAY is available and not headless
-            canCreateRealRobot = display != null && !display.isEmpty() && !isHeadless;
-        }
+        public Robot createRobot() throws AWTException {
+            // Log environment variables for debugging
+            String display = System.getenv("DISPLAY");
+            String javaAwtHeadless = System.getProperty("java.awt.headless");
+            boolean isHeadless = GraphicsEnvironment.isHeadless();
+            String osName = System.getProperty("os.name", "").toLowerCase();
 
-        log.info("Can create real Robot: {}", canCreateRealRobot);
+            log.info("Creating Robot for thread: {} - DISPLAY: {}, java.awt.headless: {}, GraphicsEnvironment.isHeadless(): {}, OS: {}",
+                    Thread.currentThread().getName(), display, javaAwtHeadless, isHeadless, osName);
 
-        // Try to create a real Robot only if we think we can
-        if (canCreateRealRobot) {
-            try {
-                log.info("Attempting to create real Robot");
-                return new Robot();
-            } catch (AWTException e) {
-                log.warn("Failed to create real Robot: {}. This is expected in headless environments.", e.getMessage());
-                // Fall through to throw exception
+            // Better headless detection logic
+            boolean canCreateRealRobot = false;
+
+            if (osName.contains("windows")) {
+                // Windows: check if we have a GUI (not headless)
+                canCreateRealRobot = !isHeadless;
+            } else {
+                // Linux/Unix: check if DISPLAY is available and not headless
+                canCreateRealRobot = display != null && !display.isEmpty() && !isHeadless;
             }
-        } else {
-            log.info("Skipping real Robot creation - headless environment detected");
-        }
 
-        // In headless environments, we cannot create a Robot
-        // We'll throw a more descriptive exception
-        throw new AWTException("Cannot create Robot in headless environment. This application requires a display for automation features.");
+            log.info("Can create real Robot: {}", canCreateRealRobot);
+
+            // Try to create a real Robot only if we think we can
+            if (canCreateRealRobot) {
+                try {
+                    log.info("Created Robot for thread: {}", Thread.currentThread().getName());
+                    return new Robot();
+                } catch (AWTException e) {
+                    log.warn("Failed to create real Robot: {}. This is expected in headless environments.", e.getMessage());
+                    // Fall through to throw exception
+                }
+            } else {
+                log.info("Skipping real Robot creation - headless environment detected");
+            }
+
+            // In headless environments, we cannot create a Robot
+            // We'll throw a more descriptive exception
+            throw new AWTException("Cannot create Robot in headless environment. This application requires a display for automation features.");
+        }
     }
     
 

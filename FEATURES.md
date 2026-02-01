@@ -60,12 +60,20 @@ ChaosBot is an advanced automation tool designed specifically for the **Chaos Co
 
 ## 🎯 **Advanced Capabilities**
 
-### **Multi-Window Support**
+### **Multi-Window Support** ⭐ NEW: Enhanced Thread Safety
 - **Parallel Processing**: Handles multiple game instances simultaneously
 - **Window Detection**: Automatically finds game windows by process name
 - **BlueStacks Integration**: Optimized for BlueStacks emulator
 - **Steam Compatibility**: Configurable for Steam client
 - **Multi-Account Management**: Supports multiple accounts on same machine
+- **Thread-Safe Architecture**:
+  - Dedicated `WindowAutomationWorker` per game window
+  - Isolated Robot instances to prevent mouse/keyboard interference
+  - Thread-safe coordinate map initialization with double-checked locking
+  - Graceful shutdown mechanism with interrupt handling
+  - Concurrent execution via fixed thread pool sized to window count
+- **Robot Isolation**: Each worker owns its own AWT Robot instance for conflict-free automation
+- **Comprehensive Test Coverage**: 14 integration tests validating multithread functionality
 
 ### **Computer Vision & OCR**
 - **Image Recognition**: Uses OpenCV for precise UI element detection

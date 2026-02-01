@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git checkout:*)",
+      "Bash(git pull:*)",
+      "Bash(git stash:*)",
+      "Bash(mvn spotbugs:*)",
+      "Bash(where mvn)",
+      "Bash(./mvnw spotbugs:check:*)",
+      "Bash(javac:*)",
+      "Bash(\"C:\\Program Files\\JetBrains\\IntelliJ IDEA Community Edition 2024.2.4\\plugins\\maven\\lib\\maven3\\bin\\mvn\" --version)",
+      "Bash(\"C:\\Program Files\\JetBrains\\IntelliJ IDEA Community Edition 2024.2.4\\plugins\\maven\\lib\\maven3\\bin\\mvn\" compile)",
+      "Bash(\"C:\\Program Files\\JetBrains\\IntelliJ IDEA 2022.1\\plugins\\maven\\lib\\maven3\\bin\\mvn\" compile)",
+      "Bash(\"C:\\Program Files\\JetBrains\\IntelliJ IDEA 2022.1\\plugins\\maven\\lib\\maven3\\bin\\mvn\" test)",
+      "Bash(git add:*)",
+      "Bash(git fetch:*)",
+      "Bash(git merge:*)",
+      "Bash(mvn:*)",
+      "Bash(\"C:\\Program Files\\JetBrains\\IntelliJ IDEA 2022.1\\plugins\\maven\\lib\\maven3\\bin\\mvn\" verify -DskipUnitTests)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
