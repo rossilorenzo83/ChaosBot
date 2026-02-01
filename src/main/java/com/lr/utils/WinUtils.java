@@ -11,10 +11,18 @@ import com.sun.jna.win32.W32APIOptions;
 import com.sun.jna.platform.win32.WinNT.HANDLEByReference;
 import com.sun.jna.platform.win32.WinDef.DWORD;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.util.ArrayList;
 import java.util.List;
 
+@Slf4j
 public class WinUtils {
+
+    private static final List<String> BLUESTACKS_INPUT_CLASSES = List.of(
+        "BlueStacksApp",
+        "plrNativeInputWindowClass"
+    );
 
     private static final boolean IS_WINDOWS = System.getProperty("os.name", "").toLowerCase().contains("windows");
 
@@ -139,8 +147,8 @@ public class WinUtils {
             char[] buffer = new char[1024];
             User32.INSTANCE.GetWindowText(hWnd, buffer, buffer.length);
             String title = Native.toString(buffer);
-            // Store HWND for SendMessage/PostMessage operations
             WindowInfo info = new WindowInfo(r, title, hWnd);
+            info.setInputHwnd(findInputChildWindow(hWnd));
             return info;
         } catch (Exception e) {
             // Return a dummy WindowInfo if any Windows-specific operation fails
@@ -162,6 +170,10 @@ public class WinUtils {
         boolean SetForegroundWindow(WinDef.HWND hWnd);
 
         WinDef.HWND FindWindowA(String lpClassName, String lpWindowName);
+
+        boolean EnumChildWindows(WinDef.HWND hWndParent, WinUser.WNDENUMPROC lpEnumFunc, Pointer lParam);
+
+        int GetClassNameA(WinDef.HWND hWnd, byte[] lpClassName, int nMaxCount);
     }
 
     /**
@@ -182,6 +194,47 @@ public class WinUtils {
             return false;
         } catch (Exception e) {
             return false;
+        }
+    }
+
+    /**
+     * Finds the child window that handles input for the given parent window.
+     * BlueStacks uses a child window with class "plrNativeInputWindowClass" for input.
+     * Logs all child window class names for diagnostic purposes.
+     *
+     * @param parentHwnd The top-level window handle
+     * @return The input child HWND, or null if no matching child found
+     */
+    public static WinDef.HWND findInputChildWindow(WinDef.HWND parentHwnd) {
+        if (!IS_WINDOWS || User32.INSTANCE == null || parentHwnd == null) {
+            return null;
+        }
+
+        try {
+            final WinDef.HWND[] result = {null};
+
+            User32.INSTANCE.EnumChildWindows(parentHwnd, (hWnd, arg) -> {
+                byte[] classNameBuf = new byte[256];
+                User32.INSTANCE.GetClassNameA(hWnd, classNameBuf, classNameBuf.length);
+                String className = Native.toString(classNameBuf);
+
+                log.info("Child window: hwnd={}, class='{}'", hWnd, className);
+
+                if (BLUESTACKS_INPUT_CLASSES.contains(className)) {
+                    log.info("Found BlueStacks input child window: hwnd={}, class='{}'", hWnd, className);
+                    result[0] = hWnd;
+                    return false; // stop enumeration
+                }
+                return true; // continue
+            }, null);
+
+            if (result[0] == null) {
+                log.info("No BlueStacks input child window found for parent hwnd={}, will use top-level window", parentHwnd);
+            }
+            return result[0];
+        } catch (Exception e) {
+            log.warn("Failed to enumerate child windows: {}", e.getMessage());
+            return null;
         }
     }
 
@@ -224,19 +277,23 @@ public class WinUtils {
     }
 
     public static class WindowInfo {
-        private final RECT rect;
-        private final String title;
-        private final WinDef.HWND hwnd;
+        RECT rect;
+        String title;
+        WinDef.HWND hwnd;
+        WinDef.HWND inputHwnd;
+
+        public WindowInfo(RECT rect, String title) {
+            this.rect = rect;
+            this.title = title;
+            this.hwnd = null;
+            this.inputHwnd = null;
+        }
 
         public WindowInfo(RECT rect, String title, WinDef.HWND hwnd) {
             this.rect = rect;
             this.title = title;
             this.hwnd = hwnd;
-        }
-
-        // Backward compatibility constructor for non-Windows platforms
-        public WindowInfo(RECT rect, String title) {
-            this(rect, title, null);
+            this.inputHwnd = null;
         }
 
         public String getTitle() {
@@ -251,9 +308,20 @@ public class WinUtils {
             return hwnd;
         }
 
+        /**
+         * Returns the HWND to use for sending input (clicks, keys, scrolls).
+         * For BlueStacks, this is the child input window. For other platforms, falls back to top-level HWND.
+         */
+        public WinDef.HWND getInputHwnd() {
+            return inputHwnd != null ? inputHwnd : hwnd;
+        }
+
+        public void setInputHwnd(WinDef.HWND inputHwnd) {
+            this.inputHwnd = inputHwnd;
+        }
+
         public String toString() {
-            return String.format("(%d,%d)-(%d,%d) : \"%s\" [hwnd=%s]",
-                rect.left, rect.top, rect.right, rect.bottom, title, hwnd);
+            return String.format("(%d,%d)-(%d,%d) : \"%s\"", rect.left, rect.top, rect.right, rect.bottom, title);
         }
     }
 }

@@ -23,6 +23,7 @@ public enum SearchViewButtons {
     IRON_ICON("iron_icon.PNG", Optional.of(RssType.IRON), Optional.of("iron_source_map.PNG"), Optional.of("iron_collect_map.PNG")),
     WOOD_ICON("wood_icon.PNG", Optional.of(RssType.WOOD), Optional.of("wood_source_map.PNG"), Optional.of("wood_collect_map.PNG")),
     WARPSTONE_ICON("wp_icon.PNG", Optional.of(RssType.WARPSTONE), Optional.of("wp_source_map.PNG"), Optional.of("wp_collect_map.PNG")),
+    RELIC_ICON("relic_icon.png", Optional.of(RssType.RELIC), Optional.of("relic_source_map.png"), Optional.of("relic_collect_map.png")),
     ARMY_ICON("army_search_icon.PNG", Optional.empty(), Optional.empty(), Optional.empty()),
 
     FOE_ICON("foe_icon.PNG", Optional.empty(), Optional.empty(), Optional.empty());
@@ -55,6 +56,7 @@ public enum SearchViewButtons {
             case FOOD -> SearchViewButtons.FOOD_ICON;
             case IRON -> SearchViewButtons.IRON_ICON;
             case WARPSTONE -> SearchViewButtons.WARPSTONE_ICON;
+            case RELIC -> SearchViewButtons.RELIC_ICON;
             default -> SearchViewButtons.WOOD_ICON;
         };
     }

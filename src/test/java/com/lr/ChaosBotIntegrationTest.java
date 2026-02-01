@@ -1,6 +1,6 @@
 package com.lr;
 
-import com.lr.utils.WindowInputService;
+import com.lr.config.RobotIntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -9,14 +9,17 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
+import java.awt.Robot;
+import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Integration tests for ChaosBot application.
  * Following TDD principles - tests are written before implementation.
- * Uses JNA-based WindowInputService for focus-independent automation.
+ * Uses hybrid approach: real Robot testing when available, graceful skipping when not.
  * Updated for Spring Boot 3.5.4 and Tess4J 5.16.0 compatibility.
  */
 @ExtendWith(SpringExtension.class)
@@ -26,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class ChaosBotIntegrationTest {
 
     @Autowired
-    private WindowInputService windowInputService;
+    private Robot robot;
 
     @Test
     void shouldStartApplicationContext() {
@@ -59,23 +62,69 @@ class ChaosBotIntegrationTest {
     }
 
     @Test
-    void shouldInjectWindowInputService() {
-        // Test that WindowInputService is properly injected
-        assertNotNull(windowInputService, "WindowInputService should be injected");
+    void shouldTestRobotScreenCaptureWhenAvailable() {
+        // Test Robot screen capture functionality when real Robot is available
+        assumeTrue(RobotIntegrationTest.isRealRobotAvailable(robot), 
+            "Skipping Robot screen capture test - no display available or using mock Robot");
+        
+        try {
+            Rectangle screenRect = new Rectangle(0, 0, 100, 100);
+            BufferedImage screenshot = robot.createScreenCapture(screenRect);
+            
+            assertNotNull(screenshot, "Screen capture should not be null");
+            assertEquals(100, screenshot.getWidth(), "Screen capture should have correct width");
+            assertEquals(100, screenshot.getHeight(), "Screen capture should have correct height");
+            
+            // Verify we got real pixel data (not blank image)
+            boolean hasRealData = false;
+            for (int x = 0; x < screenshot.getWidth(); x++) {
+                for (int y = 0; y < screenshot.getHeight(); y++) {
+                    if (screenshot.getRGB(x, y) != 0) {
+                        hasRealData = true;
+                        break;
+                    }
+                }
+            }
+            assertTrue(hasRealData, "Screen capture should contain real pixel data");
+            
+        } catch (Exception e) {
+            fail("Robot screen capture should work with real Robot: " + e.getMessage());
+        }
     }
 
     @Test
-    void shouldHandleMockWindowInputServiceGracefully() {
-        // Test that mock WindowInputService works correctly for test environments
+    void shouldTestRobotPixelColorWhenAvailable() {
+        // Test Robot pixel color functionality when real Robot is available
+        assumeTrue(RobotIntegrationTest.isRealRobotAvailable(robot), 
+            "Skipping Robot pixel color test - no display available or using mock Robot");
+        
         try {
-            BufferedImage screenshot = windowInputService.captureWindow(null);
-
-            assertNotNull(screenshot, "Mock WindowInputService screen capture should not be null");
-            assertEquals(100, screenshot.getWidth(), "Mock WindowInputService screen capture should have correct width");
-            assertEquals(100, screenshot.getHeight(), "Mock WindowInputService screen capture should have correct height");
-
+            // Test pixel color retrieval
+            java.awt.Color pixelColor = robot.getPixelColor(0, 0);
+            
+            assertNotNull(pixelColor, "Pixel color should not be null");
+            // Real Robot should return actual color, not just black
+            assertFalse(pixelColor.equals(java.awt.Color.BLACK), "Should get real pixel color, not default black");
+            
         } catch (Exception e) {
-            fail("Mock WindowInputService should work without exceptions: " + e.getMessage());
+            fail("Robot pixel color should work with real Robot: " + e.getMessage());
+        }
+    }
+
+    @Test
+    void shouldHandleMockRobotGracefully() {
+        // Test that mock Robot works correctly for headless environments
+        // This test should always pass, even with mock Robot
+        try {
+            Rectangle screenRect = new Rectangle(0, 0, 100, 100);
+            BufferedImage screenshot = robot.createScreenCapture(screenRect);
+            
+            assertNotNull(screenshot, "Mock Robot screen capture should not be null");
+            assertEquals(100, screenshot.getWidth(), "Mock Robot screen capture should have correct width");
+            assertEquals(100, screenshot.getHeight(), "Mock Robot screen capture should have correct height");
+            
+        } catch (Exception e) {
+            fail("Mock Robot should work without exceptions: " + e.getMessage());
         }
     }
 
@@ -110,4 +159,4 @@ class ChaosBotIntegrationTest {
             fail("OpenCV dependencies should be available: " + e.getMessage());
         }
     }
-}
+} 

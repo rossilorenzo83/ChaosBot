@@ -1,7 +1,6 @@
 package com.lr.business;
 
 import com.lr.config.GeneralConfig;
-import com.lr.utils.WindowInputService;
 import com.lr.utils.WinUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -10,6 +9,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.io.ResourceLoader;
 
+import java.awt.Robot;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -33,16 +33,13 @@ class CoreMechanicsUnitTest {
     private ResourceLoader resourceLoader;
 
     @Mock
-    private WindowInputService windowInputService;
-
-    @Mock
     private WinUtils.WindowInfo windowInfo;
 
     private CoreMechanics coreMechanics;
 
     @BeforeEach
     void setUp() throws Exception {
-        coreMechanics = new CoreMechanics(ocrEngine, generalConfig, resourceLoader, windowInputService);
+        coreMechanics = new CoreMechanics(ocrEngine, generalConfig, resourceLoader);
 
         // Initialize the mainMapButtonsCoordsMap since it's not initialized in constructor
         ConcurrentMap<String, java.util.Map<MainMapButtons, Double[]>> testMap = new ConcurrentHashMap<>();

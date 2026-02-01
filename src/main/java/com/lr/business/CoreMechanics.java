@@ -3,7 +3,6 @@ package com.lr.business;
 
 import com.lr.config.GeneralConfig;
 import com.lr.utils.ScreenUtils;
-import com.lr.utils.WindowInputService;
 import com.lr.utils.WinUtils;
 import lombok.extern.slf4j.Slf4j;
 import net.sourceforge.tess4j.Tesseract;
@@ -19,7 +18,7 @@ import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientException;
 
-import java.awt.Rectangle;
+import java.awt.*;
 import java.awt.event.KeyEvent;
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -30,6 +29,7 @@ import java.util.Random;
 import java.util.concurrent.ConcurrentMap;
 
 import static com.lr.utils.ScreenUtils.*;
+import static java.awt.event.InputEvent.BUTTON1_DOWN_MASK;
 import static java.awt.event.KeyEvent.VK_ESCAPE;
 import static org.opencv.imgcodecs.Imgcodecs.IMREAD_COLOR;
 
@@ -42,6 +42,30 @@ public class CoreMechanics {
 
     public static final int FAT_ARMY_THRESHOLD = 15;
     public static final int SCROLL_AMOUNT = 20;
+
+    /**
+     * Global lock for ALL automation operations.
+     *
+     * CRITICAL: Even with separate Robot instances per thread, there is only ONE physical
+     * mouse cursor on the system. All Robot.mouseMove() calls control the same cursor.
+     *
+     * This lock ensures that entire automation sequences (find -> click -> wait -> verify)
+     * are executed atomically without interference from other threads.
+     *
+     * Without this, Thread A might:
+     *   1. Move mouse to Window A button
+     *   2. [Thread B moves mouse to Window B]  <-- RACE CONDITION
+     *   3. Click (now clicking wrong location!)
+     */
+    private final Object globalAutomationLock = new Object();
+
+    /**
+     * Gets the global automation lock for serializing multi-window operations.
+     * Workers must acquire this lock before performing any automation sequence.
+     */
+    public Object getGlobalAutomationLock() {
+        return globalAutomationLock;
+    }
 
     /**
      * Lock for thread-safe initialization of mainMapButtonsCoordsMap.
@@ -57,7 +81,6 @@ public class CoreMechanics {
     }
 
     private final Tesseract ocrEngine;
-    private final WindowInputService windowInputService;
     public static final int CONVERT_IMG_FLAG = IMREAD_COLOR;
 
     public void setMainMapButtonsCoordsMap(ConcurrentMap<String, Map<MainMapButtons, Double[]>> mainMapButtonsCoordsMap) {
@@ -70,121 +93,144 @@ public class CoreMechanics {
 
     private ConcurrentMap<String, Map<MainMapButtons, Double[]>> mainMapButtonsCoordsMap;
 
+
     private final GeneralConfig generalConfig;
 
     private final ResourceLoader resourceLoader;
 
     @Autowired
-    public CoreMechanics(Tesseract ocrEngine, GeneralConfig generalConfig, ResourceLoader resourceLoader,
-                         WindowInputService windowInputService) {
+    public CoreMechanics(Tesseract ocrEngine, GeneralConfig generalConfig, ResourceLoader resourceLoader) {
         this.ocrEngine = ocrEngine;
         this.generalConfig = generalConfig;
         this.resourceLoader = resourceLoader;
-        this.windowInputService = windowInputService;
     }
 
 
-    /**
-     * Find and farm resources. No global lock needed - uses focus-independent PostMessage.
-     */
-    public void findAndFarm(String rssLevel, RssType rssType, WinUtils.WindowInfo windowInfo, boolean hasEncampment) throws IOException, URISyntaxException {
+    public void findAndFarm(String rssLevel, RssType rssType, WinUtils.WindowInfo windowInfo, boolean hasEncampment, Robot robot) throws InterruptedException, AWTException, IOException, URISyntaxException {
+        // Acquire global lock - only one window can control mouse at a time
+        synchronized (globalAutomationLock) {
+            findAndFarmInternal(rssLevel, rssType, windowInfo, hasEncampment, robot);
+        }
+    }
+
+    private void findAndFarmInternal(String rssLevel, RssType rssType, WinUtils.WindowInfo windowInfo, boolean hasEncampment, Robot robot) throws InterruptedException, AWTException, IOException, URISyntaxException {
+        WinUtils.focusWindow(windowInfo.getTitle());
+        Thread.sleep(200);
+
         Map<MainMapButtons, Double[]> windowCoords = mainMapButtonsCoordsMap.get(windowInfo.getTitle());
         if (windowCoords == null) {
             throw new IllegalStateException("No coordinates found for window: " + windowInfo.getTitle());
         }
-        clickAt(windowInfo, windowCoords.get(MainMapButtons.SEARCH));
+        Double[] searchCoords = windowCoords.get(MainMapButtons.SEARCH);
+        log.info("Window '{}' SEARCH coords: ({}, {})", windowInfo.getTitle(),
+            searchCoords != null ? searchCoords[0] : "NULL",
+            searchCoords != null ? searchCoords[1] : "NULL");
+        moveAndClick(searchCoords, robot);
 
-        String searchViewPath = takeScreenCapture(windowInfo, windowInputService);
+        String searchViewPath = takeScreenCapture(windowInfo, robot);
         Mat searchScreen = Imgcodecs.imread(searchViewPath, CONVERT_IMG_FLAG);
 
         try {
+
+
             Double[] rssExpander = findCoordsOnScreenFlexible(SearchViewButtons.SEARCH_EXPANDER.getImgPath(), searchScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
             Double[] lvlChoiceExpander = findCoordsOnScreenFlexible(SearchViewButtons.SEARCH_LEVEL_EXPANDER.getImgPath(), searchScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
 
-            clickAt(windowInfo, rssExpander);
 
-            searchViewPath = takeScreenCapture(windowInfo, windowInputService);
+            moveAndClick(rssExpander, robot);
+
+            searchViewPath = takeScreenCapture(windowInfo, robot);
             searchScreen = Imgcodecs.imread(searchViewPath, CONVERT_IMG_FLAG);
 
-            // Special handling for warpstone - requires scrolling to find in resource list
+            // Event resources (warpstone, relic) require scrolling to find in resource list
             Double[] rssTypeChoice;
-            if (rssType == RssType.WARPSTONE) {
-                rssTypeChoice = findWarpstoneIconWithScrolling(searchScreen, windowInfo);
+            if (rssType.isEvent()) {
+                rssTypeChoice = findScrollableRssIconWithScrolling(rssType, searchScreen, windowInfo, rssExpander, robot);
             } else {
                 rssTypeChoice = findCoordsOnScreenFlexible(SearchViewButtons.getEnumFromRssType(rssType).getImgPath(), searchScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
             }
 
             log.info("Coords for rss expander for rss {} found at: {}", rssType, rssTypeChoice);
-            clickAt(windowInfo, rssTypeChoice);
+            moveAndClick(rssTypeChoice, robot);
 
-            clickAt(windowInfo, lvlChoiceExpander);
+            moveAndClick(lvlChoiceExpander, robot);
 
-            searchViewPath = takeScreenCapture(windowInfo, windowInputService);
+            searchViewPath = takeScreenCapture(windowInfo, robot);
             searchScreen = Imgcodecs.imread(searchViewPath, CONVERT_IMG_FLAG);
 
             rssLevel = handleRange(rssLevel);
 
             Double[] lvlChoice = findCoordsOnScreenFlexible(SearchViewButtons.SEARCH_LEVEL_EXPANDER.getLevelIconImgPath(rssLevel, generalConfig.getGameLanguage()), searchScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
-            clickAt(windowInfo, lvlChoice);
+            moveAndClick(lvlChoice, robot);
+
 
             Double[] searchOnMapCoords = findCoordsOnScreenFlexible(Locale.FRENCH.equals(generalConfig.getGameLanguage()) ? SearchViewButtons.SEARCH_MAP_FR.getImgPath() : SearchViewButtons.SEARCH_MAP_EN.getImgPath(), searchScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
-            clickAt(windowInfo, searchOnMapCoords);
+            moveAndClick(searchOnMapCoords, robot);
 
-            String searchResultsPath = takeScreenCapture(windowInfo, windowInputService);
+            String searchResultsPath = takeScreenCapture(windowInfo, robot);
             Mat searchResultsScreen = Imgcodecs.imread(searchResultsPath, CONVERT_IMG_FLAG);
 
             Double[] goCoords = findCoordsOnScreenFlexible(Locale.FRENCH.equals(generalConfig.getGameLanguage()) ? SearchViewButtons.GO_RSS_FR.getImgPath() : SearchViewButtons.GO_RSS_EN.getImgPath(), searchResultsScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
-            clickAt(windowInfo, goCoords);
+            moveAndClick(goCoords, robot);
 
             // Now on map
             Double[] rssSource = findWindowCenterCoords(windowInfo);
-            clickAt(windowInfo, rssSource);
+            moveAndClick(rssSource, robot);
 
-            String mapPath = takeScreenCapture(windowInfo, windowInputService);
+            String mapPath = takeScreenCapture(windowInfo, robot);
             Mat mapScreen = Imgcodecs.imread(mapPath, CONVERT_IMG_FLAG);
 
             Double[] rssCollectSource = findCoordsOnScreenFlexible(SearchViewButtons.getEnumFromRssType(rssType).getOnMapCollectButtonPath(), mapScreen, windowInfo, true, generalConfig.getImageQualityLowerBound());
-            clickAt(windowInfo, rssCollectSource);
+            moveAndClick(rssCollectSource, robot);
+
 
             // Now on army selector view
             if (hasEncampment) {
-                handleStartLocationScreen(windowInfo);
+                handleStartLocationScreen(windowInfo, robot);
             }
 
-            String armySelectionPath = takeScreenCapture(windowInfo, windowInputService);
+            String armySelectionPath = takeScreenCapture(windowInfo, robot);
             Mat armySelectionScreen = Imgcodecs.imread(armySelectionPath, CONVERT_IMG_FLAG);
 
             Double[] armyPresetCoords = findCoordsOnScreenFlexible(ExpeditionViewButtons.PRESET_ICON.getImgPath(), armySelectionScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
             Double[] qtyLeftCoords = findCoordsOnScreenFlexible(ExpeditionViewButtons.RSS_LEFT.getImgPath(), armySelectionScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
 
-            useHeroIfLowQtyNode(qtyLeftCoords, windowInfo, armySelectionScreen);
 
-            clickAt(windowInfo, armyPresetCoords);
+            useHeroIfLowQtyNode(qtyLeftCoords, windowInfo, armySelectionScreen, robot);
 
-            String armyPresetsPath = takeScreenCapture(windowInfo, windowInputService);
+            moveAndClick(armyPresetCoords, robot);
+
+            String armyPresetsPath = takeScreenCapture(windowInfo, robot);
             Mat armyPresetsScreen = Imgcodecs.imread(armyPresetsPath, CONVERT_IMG_FLAG);
             Double[] armyPresetGatheringCoords = findCoordsOnScreenFlexible(ExpeditionViewButtons.PRESET_RADIO.getImgPath(), armyPresetsScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
-            clickAt(windowInfo, armyPresetGatheringCoords);
+            moveAndClick(armyPresetGatheringCoords, robot);
 
-            armySelectionPath = takeScreenCapture(windowInfo, windowInputService);
+            armySelectionPath = takeScreenCapture(windowInfo, robot);
             armySelectionScreen = Imgcodecs.imread(armySelectionPath, CONVERT_IMG_FLAG);
 
             Double[] launchCoords = findCoordsOnScreenFlexible(Locale.ENGLISH.equals(generalConfig.getGameLanguage()) ? ExpeditionViewButtons.LAUNCH_EXPEDITION_BUTTON_EN.getImgPath() : ExpeditionViewButtons.LAUNCH_EXPEDITION_BUTTON_FR.getImgPath(), armySelectionScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
-            clickAt(windowInfo, launchCoords);
+            moveAndClick(launchCoords, robot);
         } catch (ImageNotMatchedException e) {
             log.error(e.getMessage());
+            //Go back to main screen
             if (!e.getInMainMap()) {
-                goBackToMainMap(windowInfo);
+                goBackToMainMap(robot);
             }
+
+
         }
-        windowInputService.delay(generalConfig.getActionIntervalMs());
+        //Back to main screen
+        Thread.sleep(generalConfig.getActionIntervalMs());
+
         log.info("Done with findAndFarm");
+
     }
 
-    private void useHeroIfLowQtyNode(Double[] coords, WinUtils.WindowInfo windowInfo, Mat armySelectionScreen) throws IOException, URISyntaxException {
+    private void useHeroIfLowQtyNode(Double[] coords, WinUtils.WindowInfo windowInfo, Mat armySelectionScreen, Robot robot) throws AWTException, IOException, URISyntaxException, InterruptedException {
         try {
-            // Note: OCR extraction for quantity check - we'll capture the full window and crop in post-processing
-            String qtyPath = takeScreenCapture(windowInfo, "qtyExtract", windowInputService);
+            Rectangle rect = new Rectangle(coords[0].intValue() + 10, coords[1].intValue() - 10, 100, 20);
+            String qtyPath = takeScreenCapture(rect, "qtyExtract", windowInfo.getTitle(), robot);
+            //Treat input as single line text
             ocrEngine.setPageSegMode(7);
             String extractedText = ScreenUtils.extractTextFromImage(qtyPath, ocrEngine);
             log.info("Extracted Text: {}", extractedText);
@@ -195,7 +241,7 @@ public class CoreMechanics {
 
             if (qtyAvail.matches("^[0-9]+$") || (qtyAvail.contains("k") && Double.parseDouble(extractSafelyNumberFromOCRString(qtyAvail).replaceAll(",", ".")) < 30)) {
                 Double[] heroSliderCoords = findCoordsOnScreenFlexible(ExpeditionViewButtons.HERO_SLIDER.getImgPath(), armySelectionScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
-                clickAt(windowInfo, heroSliderCoords);
+                moveAndClick(heroSliderCoords, robot);
             }
 
         } catch (ImageNotMatchedException e) {
@@ -212,16 +258,27 @@ public class CoreMechanics {
         else throw new TesseractException("Parsed qty isn't a number");
     }
 
-    /**
-     * Farm armies. No global lock needed - uses focus-independent PostMessage.
-     */
-    public void armyFarming(String armyLvl, int armyPreset, WinUtils.WindowInfo windowInfo, boolean hasEncampment, Boolean isSkelly, Boolean isFirstRun) throws IOException, URISyntaxException {
+    public void armyFarming(String armyLvl, int armyPreset, WinUtils.WindowInfo windowInfo, boolean hasEncampment, Boolean isSkelly, Boolean isFirstRun, Robot robot) throws IOException, AWTException, InterruptedException, URISyntaxException {
+        // Acquire global lock - only one window can control mouse at a time
+        synchronized (globalAutomationLock) {
+            armyFarmingInternal(armyLvl, armyPreset, windowInfo, hasEncampment, isSkelly, isFirstRun, robot);
+        }
+    }
+
+    private void armyFarmingInternal(String armyLvl, int armyPreset, WinUtils.WindowInfo windowInfo, boolean hasEncampment, Boolean isSkelly, Boolean isFirstRun, Robot robot) throws IOException, AWTException, InterruptedException, URISyntaxException {
+        WinUtils.focusWindow(windowInfo.getTitle());
+        Thread.sleep(200);
+
         Map<MainMapButtons, Double[]> windowCoords = mainMapButtonsCoordsMap.get(windowInfo.getTitle());
         if (windowCoords == null) {
             throw new IllegalStateException("No coordinates found for window: " + windowInfo.getTitle());
         }
-        clickAt(windowInfo, windowCoords.get(MainMapButtons.SEARCH));
-        String searchViewPath = takeScreenCapture(windowInfo, windowInputService);
+        Double[] searchCoords = windowCoords.get(MainMapButtons.SEARCH);
+        log.info("Window '{}' SEARCH coords (armyFarming): ({}, {})", windowInfo.getTitle(),
+            searchCoords != null ? searchCoords[0] : "NULL",
+            searchCoords != null ? searchCoords[1] : "NULL");
+        moveAndClick(searchCoords, robot);
+        String searchViewPath = takeScreenCapture(windowInfo, robot);
         Mat searchScreen = Imgcodecs.imread(searchViewPath, CONVERT_IMG_FLAG);
 
         try {
@@ -229,85 +286,101 @@ public class CoreMechanics {
             if (isFirstRun) {
                 Double[] rssExpander = findCoordsOnScreenFlexible(SearchViewButtons.SEARCH_EXPANDER.getImgPath(), searchScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
 
-                clickAt(windowInfo, rssExpander);
-                searchViewPath = takeScreenCapture(windowInfo, windowInputService);
+                moveAndClick(rssExpander, robot);
+                searchViewPath = takeScreenCapture(windowInfo, robot);
                 searchScreen = Imgcodecs.imread(searchViewPath, CONVERT_IMG_FLAG);
 
                 Double[] lvlChoiceExpander = findCoordsOnScreenFlexible(SearchViewButtons.SEARCH_LEVEL_EXPANDER.getImgPath(), searchScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
 
+
                 Double[] armyChoice = findCoordsOnScreenFlexible(SearchViewButtons.ARMY_ICON.getImgPath(), searchScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
-                clickAt(windowInfo, armyChoice);
+                moveAndClick(armyChoice, robot);
 
-                clickAt(windowInfo, lvlChoiceExpander);
+                moveAndClick(lvlChoiceExpander, robot);
 
-                searchViewPath = takeScreenCapture(windowInfo, windowInputService);
+                searchViewPath = takeScreenCapture(windowInfo, robot);
                 searchScreen = Imgcodecs.imread(searchViewPath, CONVERT_IMG_FLAG);
+
 
                 armyLvl = handleRange(armyLvl);
 
                 Double[] lvlChoice = findCoordsOnScreenFlexible(SearchViewButtons.SEARCH_LEVEL_EXPANDER.getLevelIconImgPath(armyLvl, generalConfig.getGameLanguage()), searchScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
-                clickAt(windowInfo, lvlChoice);
+                moveAndClick(lvlChoice, robot);
             }
 
-            clickAt(windowInfo, mapSearchButton);
+            moveAndClick(mapSearchButton, robot);
 
-            searchViewPath = takeScreenCapture(windowInfo, windowInputService);
+            searchViewPath = takeScreenCapture(windowInfo, robot);
             searchScreen = Imgcodecs.imread(searchViewPath, CONVERT_IMG_FLAG);
 
             if (isSkelly != null && isSkelly) {
+                //Make sure we take only skelly army
                 Double[] skellyCoord = findCoordsOnScreenFlexible(SearchViewButtons.SEARCH_ARMY_SKELLY.getImgPath(), searchScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
                 Double[] extrapolateGoIconCoords = computeGoIconForSpecificArmy(skellyCoord, windowInfo, Locale.ENGLISH.equals(generalConfig.getGameLanguage()) ? SearchViewButtons.GO_RSS_EN.getImgPath() : SearchViewButtons.GO_RSS_FR.getImgPath(), searchScreen);
                 log.info("Computed coord for go button on skelly army row: {}x{}", extrapolateGoIconCoords[0], extrapolateGoIconCoords[1]);
-                clickAt(windowInfo, extrapolateGoIconCoords);
+                moveAndClick(extrapolateGoIconCoords, robot);
             } else {
                 Double[] goToArmy = findCoordsOnScreenFlexible(Locale.ENGLISH.equals(generalConfig.getGameLanguage()) ? SearchViewButtons.GO_RSS_EN.getImgPath() : SearchViewButtons.GO_RSS_FR.getImgPath(), searchScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
-                clickAt(windowInfo, goToArmy);
+                moveAndClick(goToArmy, robot);
+
             }
 
             Double[] armyOnMap = findWindowCenterCoords(windowInfo);
-            clickAt(windowInfo, armyOnMap);
+            moveAndClick(armyOnMap, robot);
 
-            searchViewPath = takeScreenCapture(windowInfo, windowInputService);
+            searchViewPath = takeScreenCapture(windowInfo, robot);
             searchScreen = Imgcodecs.imread(searchViewPath, CONVERT_IMG_FLAG);
 
             Double[] attackBtn = findCoordsOnScreenFlexible(Locale.ENGLISH.equals(generalConfig.getGameLanguage()) ? ExpeditionViewButtons.LAUNCH_ATTACK_BUTTON_EN.getImgPath() : ExpeditionViewButtons.LAUNCH_ATTACK_BUTTON_FR.getImgPath(), searchScreen, windowInfo, true, generalConfig.getImageQualityLowerBound());
-            clickAt(windowInfo, attackBtn);
+            moveAndClick(attackBtn, robot);
 
             if (hasEncampment) {
-                handleStartLocationScreen(windowInfo);
+                handleStartLocationScreen(windowInfo, robot);
             }
 
-            String armySelectionViewPath = takeScreenCapture(windowInfo, windowInputService);
+            String armySelectionViewPath = takeScreenCapture(windowInfo, robot);
             searchScreen = Imgcodecs.imread(armySelectionViewPath, CONVERT_IMG_FLAG);
             log.info("Clicking army preset #{}", armyPreset);
             Double[] armyPresetBtn = findCoordsOnScreenFlexible(ExpeditionViewButtons.getPresetById(armyPreset).getImgPath(), searchScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
-            clickAt(windowInfo, armyPresetBtn);
+            moveAndClick(armyPresetBtn, robot);
 
-            armySelectionViewPath = takeScreenCapture(windowInfo, windowInputService);
+            armySelectionViewPath = takeScreenCapture(windowInfo, robot);
             searchScreen = Imgcodecs.imread(armySelectionViewPath, CONVERT_IMG_FLAG);
 
+
             try {
+
                 Double[] launchPartyButton = findCoordsOnScreenFlexible(Locale.ENGLISH.equals(generalConfig.getGameLanguage()) ? ExpeditionViewButtons.LAUNCH_EXPEDITION_BUTTON_EN.getImgPath() : ExpeditionViewButtons.LAUNCH_EXPEDITION_BUTTON_FR.getImgPath(), searchScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
-                clickAt(windowInfo, launchPartyButton);
+
+                moveAndClick(launchPartyButton, robot);
             } catch (ImageNotMatchedException e) {
-                // Use case for big army warning
+
+                //Use case for big army warning
                 if (!"ALL".equalsIgnoreCase(armyLvl) && Integer.parseInt(armyLvl) >= FAT_ARMY_THRESHOLD) {
-                    armySelectionViewPath = takeScreenCapture(windowInfo, windowInputService);
+                    armySelectionViewPath = takeScreenCapture(windowInfo, robot);
                     searchScreen = Imgcodecs.imread(armySelectionViewPath, CONVERT_IMG_FLAG);
 
                     Double[] launchPartyConfirmationButton = findCoordsOnScreenFlexible(Locale.ENGLISH.equals(generalConfig.getGameLanguage()) ? ExpeditionViewButtons.CONFIRM_ATTACK_BUTTON_EN.getImgPath() : ExpeditionViewButtons.CONFIRM_ATTACK_BUTTON_FR.getImgPath(), searchScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
-                    clickAt(windowInfo, launchPartyConfirmationButton);
+
+                    moveAndClick(launchPartyConfirmationButton, robot);
                 }
             }
 
         } catch (ImageNotMatchedException e) {
+
+
             log.error(e.getMessage());
+            //Go back to main screen
             if (!e.getInMainMap()) {
-                goBackToMainMap(windowInfo);
+                goBackToMainMap(robot);
             }
+
         }
-        windowInputService.delay(generalConfig.getActionIntervalMs());
+        //Back to main screen
+        Thread.sleep(generalConfig.getActionIntervalMs());
+
         log.info("Done with farmArmies");
+
     }
 
     private String handleRange(String nodeLvl) {
@@ -340,36 +413,52 @@ public class CoreMechanics {
 
     }
 
-    /**
-     * Challenge stats. No global lock needed - uses focus-independent PostMessage.
-     */
-    public void challengeStats(WinUtils.WindowInfo windowInfo, WebClient discordWebClient, ChallengeViewButtons challengeViewButtons) throws IOException, URISyntaxException, TesseractException {
-        try {
-            pressKey(windowInfo, KeyEvent.VK_D);
-            windowInputService.delay(generalConfig.getActionIntervalMs());
+    public void challengeStats(WinUtils.WindowInfo windowInfo, WebClient discordWebClient, ChallengeViewButtons challengeViewButtons, Robot robot) throws IOException, AWTException, URISyntaxException, InterruptedException, TesseractException {
+        // Acquire global lock - only one window can control mouse at a time
+        synchronized (globalAutomationLock) {
+            challengeStatsInternal(windowInfo, discordWebClient, challengeViewButtons, robot);
+        }
+    }
 
-            String challengePage = takeScreenCapture(windowInfo, windowInputService);
+    private void challengeStatsInternal(WinUtils.WindowInfo windowInfo, WebClient discordWebClient, ChallengeViewButtons challengeViewButtons, Robot robot) throws IOException, AWTException, URISyntaxException, InterruptedException, TesseractException {
+        WinUtils.focusWindow(windowInfo.getTitle());
+        Thread.sleep(200);
+
+        try {
+            robot.keyPress(KeyEvent.VK_D);
+            robot.keyRelease(KeyEvent.VK_D);
+            Thread.sleep(generalConfig.getActionIntervalMs());
+
+            String challengePage = takeScreenCapture(windowInfo, robot);
             Mat locationSelectionScreen = Imgcodecs.imread(challengePage, CONVERT_IMG_FLAG);
             Double[] pastChallengeCoords = findCoordsOnScreenFlexible(ChallengeViewButtons.PAST_CHALLENGE_TAB_FR.getImgPath(), locationSelectionScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
 
-            clickAt(windowInfo, pastChallengeCoords);
+            moveAndClick(pastChallengeCoords, robot);
 
-            String pastChallengePage = takeScreenCapture(windowInfo, windowInputService);
+            String pastChallengePage = takeScreenCapture(windowInfo, robot);
             Mat pastChallengePageMat = Imgcodecs.imread(pastChallengePage, CONVERT_IMG_FLAG);
             Mat pastChallengeCurrentPageMat = pastChallengePageMat;
+
+            Double[] bottomCoords = findWindowBottomCoords(windowInfo);
+            robot.mouseMove(bottomCoords[0].intValue(), bottomCoords[1].intValue());
+            Thread.sleep(generalConfig.getActionIntervalMs());
 
             int mainScrollCounter = 0;
             boolean prevNotFound;
             do {
+
+
                 pastChallengePageMat = pastChallengeCurrentPageMat;
+
 
                 try {
                     Double[] coords = findCoordsOnScreenFlexible(challengeViewButtons.getImgPath(), pastChallengePageMat, windowInfo, false, generalConfig.getImageQualityLowerBound());
-                    clickAt(windowInfo, coords);
+                    moveAndClick(coords, robot);
 
                     MultipartBodyBuilder discordRestbuilder = new MultipartBodyBuilder();
 
-                    String challengeDetailsScreenCapturePath = takeScreenCapture(windowInfo, windowInputService);
+
+                    String challengeDetailsScreenCapturePath = takeScreenCapture(windowInfo, robot);
 
                     int scrollCounter = 0;
                     discordRestbuilder.part("files[" + scrollCounter + "]", new FileSystemResource("tmp" + windowInfo.getTitle() + ".jpg"));
@@ -378,19 +467,27 @@ public class CoreMechanics {
 
                     Mat challengeDetailsScreenCapture = Imgcodecs.imread(challengeDetailsScreenCapturePath, CONVERT_IMG_FLAG);
                     coords = findCoordsOnScreenFlexible(ChallengeViewButtons.PAST_CHALLENGE_CONTRIBS_BTTN_FR.getImgPath(), challengeDetailsScreenCapture, windowInfo, false, generalConfig.getImageQualityLowerBound());
-                    clickAt(windowInfo, coords);
-                    String challengeScorersScreenCapturePath = takeScreenCapture(windowInfo, "scores" + scrollCounter, windowInputService);
+                    moveAndClick(coords, robot);
+                    String challengeScorersScreenCapturePath = takeScreenCapture(windowInfo, "scores" + scrollCounter, robot);
                     discordRestbuilder.part("files[" + scrollCounter + 1 + "]", new FileSystemResource("tmp" + windowInfo.getTitle() + "scores" + scrollCounter + ".jpg"));
-                    Mat challengeScorersCurrentScreenCapture = Imgcodecs.imread(challengeDetailsScreenCapturePath, CONVERT_IMG_FLAG);
+                    Mat challengeScorersScreenCapture = Imgcodecs.imread(challengeDetailsScreenCapturePath, CONVERT_IMG_FLAG);
+                    Mat challengeScorersCurrentScreenCapture = challengeScorersScreenCapture;
 
                     do {
+
+                        bottomCoords = findWindowBottomCoords(windowInfo);
+                        robot.mouseMove(bottomCoords[0].intValue(), bottomCoords[1].intValue());
+                        Thread.sleep(generalConfig.getActionIntervalMs());
+
+                        challengeScorersScreenCapture = challengeScorersCurrentScreenCapture;
+
                         contextText.append(ScreenUtils.extractTextFromImage(challengeScorersScreenCapturePath, ocrEngine));
 
-                        scroll(windowInfo, 3);
-                        windowInputService.delay(generalConfig.getActionIntervalMs());
+                        robot.mouseWheel(3);
+                        Thread.sleep(generalConfig.getActionIntervalMs());
 
                         scrollCounter++;
-                        String challengeScorersCurrentScreenCapturePath = takeScreenCapture(windowInfo, "scores" + scrollCounter, windowInputService);
+                        String challengeScorersCurrentScreenCapturePath = takeScreenCapture(windowInfo, "scores" + scrollCounter, robot);
                         discordRestbuilder.part("files[" + scrollCounter + 1 + "]", new FileSystemResource("tmp" + windowInfo.getTitle() + "scores" + scrollCounter + ".jpg"));
                         challengeScorersCurrentScreenCapture = Imgcodecs.imread(challengeScorersCurrentScreenCapturePath, CONVERT_IMG_FLAG);
                         challengeScorersScreenCapturePath = challengeScorersCurrentScreenCapturePath;
@@ -402,35 +499,46 @@ public class CoreMechanics {
 
                     publishContentOnDiscord(discordWebClient, discordRestbuilder);
 
-                    pressKey(windowInfo, VK_ESCAPE);
-                    windowInputService.delay(generalConfig.getActionIntervalMs());
 
-                    pressKey(windowInfo, VK_ESCAPE);
-                    windowInputService.delay(generalConfig.getActionIntervalMs());
+                    robot.keyPress(VK_ESCAPE);
+                    robot.keyRelease(VK_ESCAPE);
+                    Thread.sleep(generalConfig.getActionIntervalMs());
+
+                    robot.keyPress(VK_ESCAPE);
+                    robot.keyRelease(VK_ESCAPE);
+                    Thread.sleep(generalConfig.getActionIntervalMs());
                     prevNotFound = false;
+
 
                 } catch (ImageNotMatchedException e) {
                     log.info("Challenge not found move fwd");
                     prevNotFound = true;
+
                 }
 
                 mainScrollCounter++;
                 log.info("Arrived at {} scrolls", mainScrollCounter);
+                //Scroll
+                bottomCoords = findWindowBottomCoords(windowInfo);
+                robot.mouseMove(bottomCoords[0].intValue(), bottomCoords[1].intValue());
+                Thread.sleep(generalConfig.getActionIntervalMs());
 
-                proceedScrolling(windowInfo, mainScrollCounter, prevNotFound);
+                proceedScrolling(mainScrollCounter, prevNotFound, robot);
 
-                String pastChallengeCurrentPage = takeScreenCapture(windowInfo, windowInputService);
+                String pastChallengeCurrentPage = takeScreenCapture(windowInfo, robot);
                 pastChallengeCurrentPageMat = Imgcodecs.imread(pastChallengeCurrentPage, CONVERT_IMG_FLAG);
             }
             while (mainScrollCounter < SCROLL_AMOUNT);
 
-            pressKey(windowInfo, VK_ESCAPE);
-            windowInputService.delay(generalConfig.getActionIntervalMs());
+            //Get back to map screen
+            robot.keyPress(VK_ESCAPE);
+            robot.keyRelease(VK_ESCAPE);
+            Thread.sleep(generalConfig.getActionIntervalMs());
 
         } catch (ImageNotMatchedException e) {
             log.error("Error in challengeStats: {}", e.getMessage());
             if (!e.getInMainMap()) {
-                goBackToMainMap(windowInfo);
+                goBackToMainMap(robot);
             }
         }
     }
@@ -447,65 +555,45 @@ public class CoreMechanics {
         }
     }
 
-    // ============ Helper methods for focus-independent input ============
-
-    /**
-     * Click at absolute screen coordinates using PostMessage (focus-independent).
-     */
-    private void clickAt(WinUtils.WindowInfo windowInfo, Double[] coords) {
-        int[] client = windowInputService.screenToClient(windowInfo.getHwnd(),
-                coords[0].intValue(), coords[1].intValue());
-        windowInputService.leftClick(windowInfo.getHwnd(), client[0], client[1]);
-        windowInputService.delay(generalConfig.getActionIntervalMs());
-    }
-
-    /**
-     * Press a key using PostMessage (focus-independent).
-     */
-    private void pressKey(WinUtils.WindowInfo windowInfo, int virtualKeyCode) {
-        windowInputService.keyTap(windowInfo.getHwnd(), virtualKeyCode);
-    }
-
-    /**
-     * Scroll the mouse wheel using PostMessage (focus-independent).
-     */
-    private void scroll(WinUtils.WindowInfo windowInfo, int delta) {
-        Double[] center = findWindowCenterCoords(windowInfo);
-        int[] client = windowInputService.screenToClient(windowInfo.getHwnd(),
-                center[0].intValue(), center[1].intValue());
-        windowInputService.mouseWheel(windowInfo.getHwnd(), client[0], client[1], delta);
-    }
-
-    private void proceedScrolling(WinUtils.WindowInfo windowInfo, int mainScrollCounter, boolean prevNotFound) {
+    private void proceedScrolling(int mainScrollCounter, boolean prevNotFound, Robot robot) throws InterruptedException {
         if (prevNotFound) {
-            scroll(windowInfo, 1);
-            windowInputService.delay(generalConfig.getActionIntervalMs());
+            robot.mouseWheel(1);
+            Thread.sleep(generalConfig.getActionIntervalMs());
         } else {
             log.info("Scrolling {} times", mainScrollCounter);
             for (int i = 0; i < mainScrollCounter; i++) {
-                scroll(windowInfo, 1);
-                windowInputService.delay(generalConfig.getActionIntervalMs());
+                robot.mouseWheel(1);
+                Thread.sleep(generalConfig.getActionIntervalMs());
             }
         }
     }
 
-    /**
-     * Received RSS stats. No global lock needed - uses focus-independent PostMessage.
-     */
-    public void receivedRss(WinUtils.WindowInfo windowInfo, WebClient discordWebClient) throws IOException, URISyntaxException, TesseractException {
+    public void receivedRss(WinUtils.WindowInfo windowInfo, WebClient discordWebClient, Robot robot) throws InterruptedException, IOException, AWTException, URISyntaxException, TesseractException {
+        // Acquire global lock - only one window can control mouse at a time
+        synchronized (globalAutomationLock) {
+            receivedRssInternal(windowInfo, discordWebClient, robot);
+        }
+    }
+
+    private void receivedRssInternal(WinUtils.WindowInfo windowInfo, WebClient discordWebClient, Robot robot) throws InterruptedException, IOException, AWTException, URISyntaxException, TesseractException {
+        WinUtils.focusWindow(windowInfo.getTitle());
+        Thread.sleep(200);
+
         try {
             Map<MainMapButtons, Double[]> windowCoords = mainMapButtonsCoordsMap.get(windowInfo.getTitle());
             if (windowCoords == null) {
                 throw new IllegalStateException("No coordinates found for window: " + windowInfo.getTitle());
             }
-            clickAt(windowInfo, windowCoords.get(MainMapButtons.REPORTS));
+            moveAndClick(windowCoords.get(MainMapButtons.REPORTS), robot);
+            Thread.sleep(generalConfig.getActionIntervalMs());
 
-            String repsPage = takeScreenCapture(windowInfo, windowInputService);
+            String repsPage = takeScreenCapture(windowInfo, robot);
             Mat repsPageMat = Imgcodecs.imread(repsPage, CONVERT_IMG_FLAG);
 
-            clickAt(windowInfo, findCoordsOnScreenFlexible(ReportViewButtons.MARCH_REPORTS_TAB_FR.getImgPath(), repsPageMat, windowInfo, false, generalConfig.getImageQualityLowerBound()));
+            moveAndClick(findCoordsOnScreenFlexible(ReportViewButtons.MARCH_REPORTS_TAB_FR.getImgPath(), repsPageMat, windowInfo, false, generalConfig.getImageQualityLowerBound()), robot);
+            Thread.sleep(generalConfig.getActionIntervalMs());
 
-            repsPage = takeScreenCapture(windowInfo, windowInputService);
+            repsPage = takeScreenCapture(windowInfo, robot);
             repsPageMat = Imgcodecs.imread(repsPage, CONVERT_IMG_FLAG);
 
             int mainScrollCounter = 0;
@@ -526,24 +614,27 @@ public class CoreMechanics {
 
                     WinUtils.WindowInfo myCustomWindow = new WinUtils.WindowInfo(rect, "custom");
 
-                    String donationWithDonorCapturePath = takeScreenCapture(myCustomWindow, windowInputService);
+                    String donationWithDonorCapturePath = takeScreenCapture(myCustomWindow, robot);
 
                     String donor = ScreenUtils.extractTextFromImage(donationWithDonorCapturePath, ocrEngine);
                     String[] segs = donor.split("\n");
 
-                    StringBuilder contextText = new StringBuilder(segs[segs.length - 1]);
+                    StringBuffer contextText = new StringBuffer(segs[segs.length - 1]);
 
-                    clickAt(windowInfo, rssReceivedCoords);
 
-                    String amountProvided = ScreenUtils.extractTextFromImage(takeScreenCapture(windowInfo, windowInputService), ocrEngine);
+                    moveAndClick(rssReceivedCoords, robot);
+                    Thread.sleep(generalConfig.getActionIntervalMs());
+
+                    String amountProvided = ScreenUtils.extractTextFromImage(takeScreenCapture(windowInfo, robot), ocrEngine);
                     segs = amountProvided.split("\n");
                     contextText.append("\n").append(segs[segs.length - 1]);
 
                     log.info("Text extracted: {}", contextText);
                     discordRestbuilder.part("content", contextText.toString());
 
-                    pressKey(windowInfo, VK_ESCAPE);
-                    windowInputService.delay(generalConfig.getActionIntervalMs());
+                    robot.keyPress(VK_ESCAPE);
+                    robot.keyRelease(VK_ESCAPE);
+                    Thread.sleep(generalConfig.getActionIntervalMs());
                     prevNotFound = false;
 
                     publishContentOnDiscord(discordWebClient, discordRestbuilder);
@@ -556,35 +647,35 @@ public class CoreMechanics {
                 }
 
                 mainScrollCounter++;
-                proceedScrolling(windowInfo, mainScrollCounter, prevNotFound);
+                proceedScrolling(mainScrollCounter, prevNotFound, robot);
 
-                repsPage = takeScreenCapture(windowInfo, windowInputService);
+                repsPage = takeScreenCapture(windowInfo, robot);
                 repsPageMat = Imgcodecs.imread(repsPage, CONVERT_IMG_FLAG);
 
             }
             while (mainScrollCounter < SCROLL_AMOUNT);
 
             //Get back to map screen
-            pressKey(windowInfo, VK_ESCAPE);
-            windowInputService.delay(generalConfig.getActionIntervalMs());
+            robot.keyPress(VK_ESCAPE);
+            robot.keyRelease(VK_ESCAPE);
+            Thread.sleep(generalConfig.getActionIntervalMs());
 
         } catch (ImageNotMatchedException e) {
             log.error("Error in receivedRss: {}", e.getMessage());
-            // Go back to main screen when image recognition fails
             if (!e.getInMainMap()) {
-                goBackToMainMap(windowInfo);
+                goBackToMainMap(robot);
             }
         }
     }
 
 
-    private void handleStartLocationScreen(WinUtils.WindowInfo windowInfo) throws IOException, URISyntaxException, ImageNotMatchedException {
-        String locationSelectionPath = takeScreenCapture(windowInfo, windowInputService);
+    private void handleStartLocationScreen(WinUtils.WindowInfo windowInfo, Robot robot) throws AWTException, IOException, URISyntaxException, ImageNotMatchedException, InterruptedException {
+        String locationSelectionPath = takeScreenCapture(windowInfo, robot);
         Mat locationSelectionScreen = Imgcodecs.imread(locationSelectionPath, CONVERT_IMG_FLAG);
         Double[] fortressIcon = findCoordsOnScreenFlexible(ExpeditionViewButtons.FORTRESS_SELECTION_ICON.getImgPath(), locationSelectionScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
-        clickAt(windowInfo, fortressIcon);
+        moveAndClick(fortressIcon, robot);
         Double[] nextBtnCoords = findCoordsOnScreenFlexible(Locale.ENGLISH.equals(generalConfig.getGameLanguage()) ? ExpeditionViewButtons.NEXT_BUTTON_EN.getImgPath() : ExpeditionViewButtons.NEXT_BUTTON_FR.getImgPath(), locationSelectionScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
-        clickAt(windowInfo, nextBtnCoords);
+        moveAndClick(nextBtnCoords, robot);
     }
 
     public static Double[] findWindowCenterCoords(WinUtils.WindowInfo windowInfo) {
@@ -599,94 +690,65 @@ public class CoreMechanics {
         return new Double[]{screenRect.getX() + screenRect.getWidth() / 2, screenRect.getY() + screenRect.getHeight() * 2 / 3};
     }
 
-    /**
-     * Go back to main map by pressing ESC multiple times.
-     * Uses focus-independent PostMessage.
-     */
-    private void goBackToMainMap(WinUtils.WindowInfo windowInfo) {
+    private void moveAndClick(Double[] coords, Robot robot) throws InterruptedException {
+        robot.mouseMove(coords[0].intValue(), coords[1].intValue());
+        robot.mousePress(BUTTON1_DOWN_MASK);
+        robot.mouseRelease(BUTTON1_DOWN_MASK);
+        Thread.sleep(generalConfig.getActionIntervalMs());
+    }
+
+
+    private void goBackToMainMap(Robot robot) throws InterruptedException {
         log.info("Attempting to return to main map screen");
-
-        // Press ESC multiple times to ensure we get back to main map from any nested screen
-        for (int i = 0; i < 3; i++) {
-            pressKey(windowInfo, VK_ESCAPE);
-            windowInputService.delay(500); // Short delay between key presses
-        }
-
-        // Longer delay to allow UI transitions to complete
-        windowInputService.delay(generalConfig.getActionIntervalMs() * 2);
-
+        robot.keyPress(VK_ESCAPE);
+        robot.keyRelease(VK_ESCAPE);
+        Thread.sleep(generalConfig.getActionIntervalMs());
         log.info("Returned to main map screen");
     }
 
 
     /**
-     * Find warpstone icon with scrolling logic since it's not immediately visible on screen.
-     * Uses focus-independent PostMessage.
+     * Find a scrollable resource icon (warpstone, relic, etc.) that requires scrolling
+     * in the resource list since it's not immediately visible on screen.
      */
-    private Double[] findWarpstoneIconWithScrolling(Mat searchScreen, WinUtils.WindowInfo windowInfo) throws IOException, URISyntaxException, ImageNotMatchedException {
-        log.info("Looking for warpstone icon with scrolling logic (primarily downward)");
+    private Double[] findScrollableRssIconWithScrolling(RssType rssType, Mat searchScreen, WinUtils.WindowInfo windowInfo, Double[] expanderCoords, Robot robot) throws InterruptedException, AWTException, IOException, URISyntaxException, ImageNotMatchedException {
+        String iconPath = SearchViewButtons.getEnumFromRssType(rssType).getImgPath();
+        log.info("Looking for {} icon with scrolling logic, scrolling immediately", rssType);
 
-        // First, try to find warpstone without scrolling
-        try {
-            Double[] warpstoneIconCoords = findCoordsOnScreenFlexible(SearchViewButtons.WARPSTONE_ICON.getImgPath(), searchScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
-            log.info("Warpstone icon found without scrolling");
-            return warpstoneIconCoords;
-        } catch (ImageNotMatchedException e) {
-            log.info("Warpstone icon not visible, starting scrolling search...");
-        }
-
-        // Click on resource list area to ensure it's focused for scrolling
-        Double[] resourceListCoords = findResourceListScrollPosition(windowInfo);
-        clickAt(windowInfo, resourceListCoords);
-
-        // Scroll down to find warpstone (primary direction based on user feedback)
-        return performWarpstoneScroll(windowInfo, 1, "down", 8);
-    }
-
-    /**
-     * Calculate the optimal mouse position for scrolling the resource list
-     */
-    private Double[] findResourceListScrollPosition(WinUtils.WindowInfo windowInfo) {
+        // Position mouse in the lower third of the window, left third of the width (inside the scrollable dropdown)
         Rectangle windowRect = new Rectangle(windowInfo.getRect().left, windowInfo.getRect().top,
                 Math.abs(windowInfo.getRect().right - windowInfo.getRect().left),
                 Math.abs(windowInfo.getRect().bottom - windowInfo.getRect().top));
-
-        // Position mouse on the left side of the window where resource icons are typically located
-        // About 1/4 from the left and middle height
-        double x = windowRect.getX() + windowRect.getWidth() * 0.25;
-        double y = windowRect.getY() + windowRect.getHeight() * 0.5;
-
-        return new Double[]{x, y};
+        double x = windowRect.getX() + windowRect.getWidth() / 6.0;
+        double y = windowRect.getY() + windowRect.getHeight() * 5.0 / 6.0;
+        Double[] scrollPos = new Double[]{x, y};
+        return performScrollToFindIcon(iconPath, rssType.name(), windowInfo, scrollPos, 1, "down", 8, robot);
     }
 
-    /**
-     * Perform focused scrolling to find warpstone icon.
-     * Uses focus-independent PostMessage.
-     */
-    private Double[] performWarpstoneScroll(WinUtils.WindowInfo windowInfo, int wheelDirection, String directionName, int maxScrolls) throws IOException, URISyntaxException, ImageNotMatchedException {
-        log.info("Scrolling {} to find warpstone (max {} scrolls)", directionName, maxScrolls);
+
+    private Double[] performScrollToFindIcon(String iconPath, String iconName, WinUtils.WindowInfo windowInfo, Double[] scrollPos, int wheelDirection, String directionName, int maxScrolls, Robot robot) throws InterruptedException, IOException, URISyntaxException, ImageNotMatchedException, AWTException {
+        log.info("Scrolling {} to find {} (max {} scrolls)", directionName, iconName, maxScrolls);
+
+        robot.mouseMove(scrollPos[0].intValue(), scrollPos[1].intValue());
 
         for (int scrollCount = 0; scrollCount < maxScrolls; scrollCount++) {
-            // Perform scroll using PostMessage
-            scroll(windowInfo, wheelDirection);
-            windowInputService.delay(generalConfig.getActionIntervalMs());
+            robot.mouseWheel(wheelDirection);
+            Thread.sleep(generalConfig.getActionIntervalMs());
 
-            // Take screenshot after scroll
-            String searchViewPath = takeScreenCapture(windowInfo, windowInputService);
+            String searchViewPath = takeScreenCapture(windowInfo, robot);
             Mat currentScreen = Imgcodecs.imread(searchViewPath, CONVERT_IMG_FLAG);
 
-            // Try to find warpstone
             try {
-                Double[] warpstoneIconCoords = findCoordsOnScreenFlexible(SearchViewButtons.WARPSTONE_ICON.getImgPath(), currentScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
-                log.info("Warpstone icon found after {} {} scrolls", scrollCount + 1, directionName);
-                return warpstoneIconCoords;
+                Double[] iconCoords = findCoordsOnScreenFlexible(iconPath, currentScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
+                log.info("{} icon found after {} {} scrolls", iconName, scrollCount + 1, directionName);
+                return iconCoords;
             } catch (ImageNotMatchedException e) {
-                log.info("Warpstone not found after scroll {} {}, continuing...", scrollCount + 1, directionName);
+                log.info("{} not found after scroll {} {}, continuing...", iconName, scrollCount + 1, directionName);
             }
         }
 
-        log.error("Warpstone icon not found after {} {} scrolls", maxScrolls, directionName);
-        throw new ImageNotMatchedException("Warpstone icon not found after scrolling " + directionName, false);
+        log.error("{} icon not found after {} {} scrolls", iconName, maxScrolls, directionName);
+        throw new ImageNotMatchedException(iconName + " icon not found after scrolling " + directionName, false);
     }
 
 

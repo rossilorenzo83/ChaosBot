@@ -76,7 +76,7 @@ mvn clean test jacoco:report
 - **Strategy Pattern**: Different action types (RSS_FARMING, ARMY_FARMING, CHALLENGE_STATS, DONORS_STATS)
 - **Template Matching System**: Flexible image recognition with quality bounds
 - **Multi-window Support**: Concurrent processing of multiple game instances
-- **Worker Pattern**: Dedicated `WindowAutomationWorker` encapsulates per-window state and Robot instance
+- **Worker Pattern**: Dedicated `WindowAutomationWorker` 22encapsulates per-window state and Robot instance
 - **Double-Checked Locking**: Thread-safe ConcurrentHashMap initialization in coordinate registration
 - **Graceful Shutdown**: Volatile flag + interrupt handling for clean worker termination
 

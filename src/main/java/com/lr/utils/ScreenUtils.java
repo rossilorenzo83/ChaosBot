@@ -11,7 +11,9 @@ import org.opencv.imgcodecs.Imgcodecs;
 import org.springframework.core.io.ClassPathResource;
 
 import javax.imageio.ImageIO;
+import java.awt.*;
 import java.awt.image.BufferedImage;
+import java.awt.image.DataBufferByte;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -27,22 +29,28 @@ public class ScreenUtils {
 
 
     /**
-     * Return a string containing the filePath of the captured image.
-     * Uses JNA PrintWindow to capture window without requiring focus.
+     * Return a string containing the filePath of the captured image
      *
-     * @param windowInfo Window information including HWND
-     * @param inputService WindowInputService for capturing
-     * @return File path of the captured image
-     * @throws IOException If image cannot be written
+     * @param windowInfo
+     * @param robot Robot instance to use for screen capture
+     * @return
+     * @throws AWTException
+     * @throws IOException
      */
-    public static String takeScreenCapture(WinUtils.WindowInfo windowInfo, WindowInputService inputService) throws IOException {
-        return takeScreenCapture(windowInfo, "", inputService);
+    public static String takeScreenCapture(WinUtils.WindowInfo windowInfo, Robot robot) throws AWTException, IOException {
+        return takeScreenCapture(windowInfo, "", robot);
     }
 
-    public static String takeScreenCapture(WinUtils.WindowInfo windowInfo, String postfix, WindowInputService inputService) throws IOException {
-        BufferedImage capture = inputService.captureWindow(windowInfo.getHwnd());
-        String filePath = "tmp" + windowInfo.getTitle() + postfix + ".png";
-        ImageIO.write(capture, "png", new File(filePath));
+    public static String takeScreenCapture(WinUtils.WindowInfo windowInfo, String postfix, Robot robot) throws AWTException, IOException {
+        Rectangle screenRect = new Rectangle(windowInfo.rect.left, windowInfo.rect.top, Math.abs(windowInfo.rect.right
+                - windowInfo.rect.left), Math.abs(windowInfo.rect.bottom - windowInfo.rect.top));
+        return takeScreenCapture(screenRect, windowInfo.title, postfix, robot);
+    }
+
+    public static String takeScreenCapture(Rectangle rectangle, String winTitle, String postfix, Robot robot) throws AWTException, IOException {
+        BufferedImage capture = robot.createScreenCapture(rectangle);
+        String filePath = "tmp" + winTitle + postfix + ".jpg";
+        ImageIO.write(capture, "jpg", new File(filePath));
         return filePath;
     }
 
@@ -76,6 +84,24 @@ public class ScreenUtils {
             Boolean inMainMap,
             Double minQualityThreshold
     ) throws URISyntaxException, ImageNotMatchedException, IOException {
+        // Default: search entire screen
+        return findCoordsOnScreenFlexible(pathImgToFind, fullScreenImg, windowInfo, inMainMap, minQualityThreshold, 0.0, 1.0);
+    }
+
+    /**
+     * Find coordinates with vertical region constraint.
+     * @param verticalStart Start of search region (0.0 = top, 1.0 = bottom)
+     * @param verticalEnd End of search region (0.0 = top, 1.0 = bottom)
+     */
+    public static Double[] findCoordsOnScreenFlexible(
+            String pathImgToFind,
+            Mat fullScreenImg,
+            WinUtils.WindowInfo windowInfo,
+            Boolean inMainMap,
+            Double minQualityThreshold,
+            Double verticalStart,
+            Double verticalEnd
+    ) throws URISyntaxException, ImageNotMatchedException, IOException {
         try {
             // 1. Load template image
             InputStream inputStream = new ClassPathResource(pathImgToFind).getInputStream();
@@ -86,34 +112,44 @@ public class ScreenUtils {
                     StandardCopyOption.REPLACE_EXISTING
             );
             inputStream.close();
-            Mat toMatch = Imgcodecs.imread(f.getPath(), Imgcodecs.IMREAD_COLOR); // Use your CONVERT_IMG_FLAG if needed
+            Mat toMatch = Imgcodecs.imread(f.getPath(), Imgcodecs.IMREAD_COLOR);
 
             double screenshotWidth = fullScreenImg.width();
             double screenshotHeight = fullScreenImg.height();
-            log.info("Template size: {}x{}", screenshotWidth, screenshotHeight);
+            log.info("Screenshot size: {}x{}", screenshotWidth, screenshotHeight);
 
             boolean isPortrait = screenshotHeight > screenshotWidth;
             log.info("Portrait resolution: {}", isPortrait);
 
             Double resizeFactor = computeScaleFactor(fullScreenImg);
-            log.info("Resized template image dimensions: {}", resizeFactor);
+            log.info("Resize factor: {}", resizeFactor);
             Mat resizedTemplate = resizeImage(toMatch, resizeFactor);
+
+            // Apply region constraint if specified
+            Mat searchRegion = fullScreenImg;
+            int regionYOffset = 0;
+            if (verticalStart > 0.0 || verticalEnd < 1.0) {
+                int startY = (int)(screenshotHeight * verticalStart);
+                int endY = (int)(screenshotHeight * verticalEnd);
+                regionYOffset = startY;
+                searchRegion = fullScreenImg.submat(startY, endY, 0, (int)screenshotWidth);
+                log.info("Searching in region: y={} to y={}", startY, endY);
+            }
 
             // Perform template matching
             Mat result = new Mat();
-            matchTemplate(fullScreenImg, resizedTemplate, result, TM_CCOEFF_NORMED);
+            matchTemplate(searchRegion, resizedTemplate, result, TM_CCOEFF_NORMED);
             Core.MinMaxLocResult mmr = Core.minMaxLoc(result);
 
             if (mmr.maxVal >= minQualityThreshold) {
-                log.info("Template matched with confidence: {}", mmr.maxVal);
-                //Draw rectangle on result image
-                rectangle(fullScreenImg, mmr.maxLoc, new Point(mmr.maxLoc.x + toMatch.cols(),
-                        mmr.maxLoc.y + toMatch.rows()), new Scalar(255, 255, 255));
+                log.info("Template matched with confidence: {} at local ({},{})", mmr.maxVal, mmr.maxLoc.x, mmr.maxLoc.y);
+
                 double offsetX = mmr.maxLoc.x;
-                double offsetY = mmr.maxLoc.y;
+                double offsetY = mmr.maxLoc.y + regionYOffset; // Add back the region offset
                 double absXCoord = windowInfo.getRect().left + offsetX + resizedTemplate.size().width / 2;
                 double absYCoord = windowInfo.getRect().top + offsetY + resizedTemplate.size().height / 2;
 
+                log.info("Absolute coords: ({}, {})", absXCoord, absYCoord);
                 return new Double[]{absXCoord, absYCoord};
             } else {
                 log.error("Insufficient confidence {} matching the provided template", mmr.maxVal);

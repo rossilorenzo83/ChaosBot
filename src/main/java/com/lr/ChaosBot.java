@@ -4,7 +4,6 @@ import com.lr.business.CoreMechanics;
 import com.lr.business.WindowAutomationWorker;
 import com.lr.config.GeneralConfig;
 import com.lr.config.MarchConfig;
-import com.lr.utils.WindowInputService;
 import com.lr.utils.WinUtils;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
@@ -32,7 +31,7 @@ public class ChaosBot implements CommandLineRunner {
     private final GeneralConfig generalConfig;
     private final MarchConfig marchConfig;
     private final WebClient discordWebClient;
-    private final WindowInputService windowInputService;
+    private final com.lr.config.Beans.RobotFactory robotFactory;
 
     // Track workers for graceful shutdown
     private final List<WindowAutomationWorker> workers = new ArrayList<>();
@@ -40,14 +39,14 @@ public class ChaosBot implements CommandLineRunner {
     @Autowired
     public ChaosBot(CoreMechanics coreMechanics, ExecutorService executorService, Random random,
                    GeneralConfig generalConfig, MarchConfig marchConfig, WebClient discordWebClient,
-                   WindowInputService windowInputService) {
+                   com.lr.config.Beans.RobotFactory robotFactory) {
         this.coreMechanics = coreMechanics;
         this.executorService = executorService;
         this.random = random;
         this.generalConfig = generalConfig;
         this.marchConfig = marchConfig;
         this.discordWebClient = discordWebClient;
-        this.windowInputService = windowInputService;
+        this.robotFactory = robotFactory;
     }
 
     /**
@@ -115,7 +114,7 @@ public class ChaosBot implements CommandLineRunner {
                 marchConfig,
                 discordWebClient,
                 random,
-                windowInputService
+                robotFactory
             );
 
             // Track worker for shutdown (accessed by @PreDestroy)

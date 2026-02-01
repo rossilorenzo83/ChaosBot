@@ -2,7 +2,6 @@ package com.lr.business;
 
 import com.lr.config.GeneralConfig;
 import com.lr.config.MarchConfig;
-import com.lr.utils.WindowInputService;
 import com.lr.utils.WinUtils;
 import lombok.extern.slf4j.Slf4j;
 import net.sourceforge.tess4j.TesseractException;
@@ -11,6 +10,8 @@ import org.opencv.core.Mat;
 import org.opencv.imgcodecs.Imgcodecs;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.awt.AWTException;
+import java.awt.Robot;
 import java.io.File;
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -27,10 +28,11 @@ import static com.lr.utils.ScreenUtils.*;
 
 /**
  * Worker class that handles automation for a single game window.
- * Uses focus-independent JNA PostMessage/SendMessage for parallel execution.
+ * Each worker owns its own Robot instance to prevent thread interference.
  *
  * This class encapsulates:
  * - Window-specific state (availMarches, firstRun, etc.)
+ * - Window-specific Robot instance
  * - Main automation loop for the window
  * - Proper resource cleanup
  */
@@ -43,17 +45,20 @@ public class WindowAutomationWorker implements Runnable {
     private final MarchConfig marchConfig;
     private final WebClient discordWebClient;
     private final Random random;
-    private final WindowInputService windowInputService;
+    private final com.lr.config.Beans.RobotFactory robotFactory;
 
     // Per-worker state
+    private Robot robot;
     private Integer availMarches;
     private Boolean firstRun = true;
     private Long timeLastActionPerformed;
     private volatile boolean shutdownRequested = false;
+    private int consecutiveFailures = 0;
+    private static final int MAX_FAILURES_BEFORE_REINIT = 3;
 
     /**
      * Creates a new window automation worker.
-     * Uses WindowInputService for focus-independent input.
+     * Robot instance will be created lazily on first use.
      */
     public WindowAutomationWorker(
             WinUtils.WindowInfo windowInfo,
@@ -62,7 +67,7 @@ public class WindowAutomationWorker implements Runnable {
             MarchConfig marchConfig,
             WebClient discordWebClient,
             Random random,
-            WindowInputService windowInputService) {
+            com.lr.config.Beans.RobotFactory robotFactory) {
 
         this.windowInfo = windowInfo;
         this.coreMechanics = coreMechanics;
@@ -70,9 +75,21 @@ public class WindowAutomationWorker implements Runnable {
         this.marchConfig = marchConfig;
         this.discordWebClient = discordWebClient;
         this.random = random;
-        this.windowInputService = windowInputService;
+        this.robotFactory = robotFactory;
         this.availMarches = marchConfig.getMarchesAvailable();
         this.timeLastActionPerformed = System.currentTimeMillis();
+    }
+
+    /**
+     * Gets or creates the Robot instance for this worker.
+     * Lazy initialization to avoid creating Robot in constructor.
+     */
+    private Robot getRobot() throws AWTException {
+        if (robot == null) {
+            robot = robotFactory.createRobot();
+            log.info("Created Robot instance for window: {}", windowInfo.getTitle());
+        }
+        return robot;
     }
 
     @Override
@@ -87,7 +104,7 @@ public class WindowAutomationWorker implements Runnable {
         } catch (InterruptedException e) {
             log.info("Worker interrupted for window: {}", windowInfo.getTitle());
             Thread.currentThread().interrupt(); // Preserve interrupt status
-        } catch (IOException | URISyntaxException e) {
+        } catch (AWTException | IOException | URISyntaxException e) {
             log.error("Fatal error in automation worker for window: {}", windowInfo.getTitle(), e);
 
         } finally {
@@ -98,10 +115,10 @@ public class WindowAutomationWorker implements Runnable {
     /**
      * Initialize window coordinates and setup.
      */
-    private void initializeWindow() throws IOException, URISyntaxException {
+    private void initializeWindow() throws AWTException, IOException, URISyntaxException, InterruptedException {
         log.info("Initializing window: {}", windowInfo.getTitle());
 
-        String fullImagePath = takeScreenCapture(windowInfo, windowInputService);
+        String fullImagePath = takeScreenCapture(windowInfo, getRobot());
         Mat fullScreen = Imgcodecs.imread(fullImagePath, CONVERT_IMG_FLAG);
         log.info("Loaded image dimensions: {}", fullScreen.size().toString());
 
@@ -125,8 +142,6 @@ public class WindowAutomationWorker implements Runnable {
                 if (mainMapButton.equals(MainMapButtons.ENCAMPMENTS)) {
                     hasEncampments = false;
                     log.info("No encampments found for window: {}", windowInfo.getTitle());
-                } else {
-                    log.error("Failed to find coordinates for {}: {}", mainMapButton.name(), e.getMessage());
                 }
             }
         }
@@ -166,6 +181,13 @@ public class WindowAutomationWorker implements Runnable {
 
         // Now add this window's coordinates (thread-safe due to ConcurrentHashMap)
         existingCoordsMap.put(windowInfo.getTitle(), currentWindowCoords);
+
+        // Log stored coordinates for debugging
+        Double[] searchCoords = currentWindowCoords.get(MainMapButtons.SEARCH);
+        log.info("STORED coords for window '{}': SEARCH=({}, {})",
+            windowInfo.getTitle(),
+            searchCoords != null ? searchCoords[0] : "NULL",
+            searchCoords != null ? searchCoords[1] : "NULL");
     }
 
     /**
@@ -211,22 +233,53 @@ public class WindowAutomationWorker implements Runnable {
                     availMarches--;
                     firstRun = false;
                     timeLastActionPerformed = System.currentTimeMillis();
+                    consecutiveFailures = 0; // Reset failure counter on success
 
                     log.info("Action completed successfully for window: {}. Marches remaining: {}",
                         windowInfo.getTitle(), availMarches);
 
+                } catch (InterruptedException e) {
+                    // Re-throw InterruptedException to allow graceful shutdown
+                    throw e;
                 } catch (Exception e) {
+                    consecutiveFailures++;
+
                     // Catch ALL exceptions - loop must NEVER die from errors like:
                     // ImageNotMatchedException, template not found, coords not found, etc.
-                    log.warn("Action failed for window: {}. Will retry on next interval. Error: {} - {}",
-                        windowInfo.getTitle(), e.getClass().getSimpleName(), e.getMessage());
+                    log.warn("Action failed for window: {} (failure {}/{}). Error: {} - {}",
+                        windowInfo.getTitle(), consecutiveFailures, MAX_FAILURES_BEFORE_REINIT,
+                        e.getClass().getSimpleName(), e.getMessage());
+
+                    // Check if we need to re-initialize (likely coords issue)
+                    if (consecutiveFailures >= MAX_FAILURES_BEFORE_REINIT) {
+                        log.info("Too many consecutive failures for window: {}. Attempting recovery...",
+                            windowInfo.getTitle());
+
+                        try {
+                            // Try to return to main map by pressing ESC
+                            Robot recoveryRobot = getRobot();
+                            recoveryRobot.keyPress(java.awt.event.KeyEvent.VK_ESCAPE);
+                            recoveryRobot.keyRelease(java.awt.event.KeyEvent.VK_ESCAPE);
+                            Thread.sleep(1000);
+
+                            // Re-initialize window coordinates
+                            initializeWindow();
+                            consecutiveFailures = 0;
+                            firstRun = true;
+                            log.info("Recovery successful for window: {}", windowInfo.getTitle());
+
+                        } catch (Exception reinitEx) {
+                            log.error("Recovery failed for window: {}. Will keep retrying. Error: {}",
+                                windowInfo.getTitle(), reinitEx.getMessage());
+                        }
+                    }
 
                     // Still decrement marches to prevent infinite retry loop
                     availMarches--;
                     timeLastActionPerformed = System.currentTimeMillis();
 
                     // Small delay before continuing to avoid rapid failure loops
-                    windowInputService.delay(generalConfig.getActionIntervalMs());
+                    Thread.sleep(generalConfig.getActionIntervalMs());
                 }
             }
 
@@ -261,10 +314,13 @@ public class WindowAutomationWorker implements Runnable {
     /**
      * Perform the configured action type.
      *
-     * All CoreMechanics methods now use focus-independent PostMessage/SendMessage,
-     * allowing true parallel execution without any global synchronization.
+     * NOTE: Global automation lock is now acquired INSIDE CoreMechanics methods,
+     * only during actual mouse/keyboard operations. This allows parallel execution of:
+     * - Screen captures (each thread has its own Robot)
+     * - Image processing and template matching
+     * Only mouse movements and clicks are serialized.
      */
-    private void performAction() throws IOException, URISyntaxException, TesseractException {
+    private void performAction() throws AWTException, IOException, URISyntaxException, InterruptedException, TesseractException {
         switch (generalConfig.getActionType()) {
             case ARMY_FARMING:
                 log.info("Executing ARMY_FARMING for window: {}", windowInfo.getTitle());
@@ -277,7 +333,8 @@ public class WindowAutomationWorker implements Runnable {
                     windowInfo,
                     hasEncampments,
                     marchConfig.getIsSkelly(),
-                    firstRun
+                    firstRun,
+                    getRobot()
                 );
                 break;
 
@@ -290,13 +347,13 @@ public class WindowAutomationWorker implements Runnable {
                 );
 
                 for (ChallengeViewButtons challengeViewButton : challengeButtons) {
-                    coreMechanics.challengeStats(windowInfo, discordWebClient, challengeViewButton);
+                    coreMechanics.challengeStats(windowInfo, discordWebClient, challengeViewButton, getRobot());
                 }
                 break;
 
             case DONORS_STATS:
                 log.info("Executing DONORS_STATS for window: {}", windowInfo.getTitle());
-                coreMechanics.receivedRss(windowInfo, discordWebClient);
+                coreMechanics.receivedRss(windowInfo, discordWebClient, getRobot());
                 break;
 
             case RSS_FARMING:
@@ -306,7 +363,8 @@ public class WindowAutomationWorker implements Runnable {
                     marchConfig.getTargetRssLevel(),
                     getRssTypeFromConfig(),
                     windowInfo,
-                    hasEncampments
+                    hasEncampments,
+                    getRobot()
                 );
                 break;
         }
@@ -317,8 +375,10 @@ public class WindowAutomationWorker implements Runnable {
      */
     private RssType getRssTypeFromConfig() {
         return switch (marchConfig.getRssType()) {
-            case "ALL" -> RssType.values()[random.nextInt(RssType.values().length)];
-            case "ALL_WO_WS" -> RssType.values()[random.nextInt(RssType.values().length - 1)];
+            case "ALL", "ALL_WO_WS", "ALL_WO_EVENTS" -> {
+                RssType[] standard = RssType.standardTypes();
+                yield standard[random.nextInt(standard.length)];
+            }
             default -> RssType.valueOf(marchConfig.getRssType());
         };
     }
@@ -328,7 +388,14 @@ public class WindowAutomationWorker implements Runnable {
      */
     private void cleanup() {
         log.info("Cleaning up resources for window: {}", windowInfo.getTitle());
-        // No explicit cleanup needed - WindowInputService is stateless
+
+        // Robot cleanup - not strictly necessary as Robot has no explicit cleanup,
+        // but setting to null allows GC
+        if (robot != null) {
+            robot = null;
+            log.info("Released Robot instance for window: {}", windowInfo.getTitle());
+        }
+
         log.info("Worker cleanup complete for window: {}", windowInfo.getTitle());
     }
 }
