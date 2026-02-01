@@ -619,7 +619,7 @@ public class CoreMechanics {
                     String donor = ScreenUtils.extractTextFromImage(donationWithDonorCapturePath, ocrEngine);
                     String[] segs = donor.split("\n");
 
-                    StringBuffer contextText = new StringBuffer(segs[segs.length - 1]);
+                    StringBuilder contextText = new StringBuilder(segs[segs.length - 1]);
 
 
                     moveAndClick(rssReceivedCoords, robot);

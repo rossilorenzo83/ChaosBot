@@ -200,17 +200,4 @@ public class ScreenUtils {
 
     }
 
-    public static Boolean isSameImage(Mat image1, Mat image2) {
-
-        Mat difference = new Mat();
-        Mat grey1 = new Mat();
-        Mat grey2 = new Mat();
-
-        cvtColor(image1, grey1, COLOR_BGR2GRAY);
-        cvtColor(image2, grey2, COLOR_BGR2GRAY);
-        compare(grey1, grey2, difference, CMP_NE);
-
-
-        return countNonZero(difference) == 0;
-    }
 }
