@@ -137,9 +137,9 @@ public class RobotIntegrationTest {
 
     @Test
     void shouldSupportSpringBoot35Integration() {
-        // Test that Spring Boot 3.5.4 integration works correctly
+        // Test that Spring Boot 4.0 integration works correctly
         String springVersion = org.springframework.core.SpringVersion.getVersion();
         assertNotNull(springVersion, "Spring version should not be null");
-        assertTrue(springVersion.startsWith("6."), "Should be using Spring Framework 6.x with Spring Boot 3.5.4");
+        assertTrue(springVersion.startsWith("7."), "Should be using Spring Framework 7.x with Spring Boot 4.0");
     }
 } 
