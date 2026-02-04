@@ -112,6 +112,9 @@ jobs:
     name: Security Scan
     runs-on: ubuntu-latest
     needs: build-and-test
+    # Required permissions for dependency submission
+    permissions:
+      contents: write
 
     steps:
     - name: Checkout Source
@@ -163,5 +166,7 @@ jobs:
           target/dependency-check-report.json
 
     # Optional: Uploads the full dependency graph to GitHub to improve the quality of Dependabot alerts this repository can receive
+    # Only runs on push events (not PRs) because PRs have limited token permissions
     - name: Update dependency graph
+      if: github.event_name == 'push'
       uses: advanced-security/maven-dependency-submission-action@571e99aab1055c2e71a1e2309b9691de18d6b7d6
