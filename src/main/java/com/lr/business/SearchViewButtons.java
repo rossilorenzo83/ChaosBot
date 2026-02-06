@@ -38,7 +38,8 @@ public enum SearchViewButtons {
 
     public String getLevelIconImgPath(String text, Locale locale) {
         log.info("Searching lvl icon for lvl: {} and locale: {}", text, locale);
-        return "ALL".equals(text) ? "all_lvls_" + locale.getLanguage() + ".PNG" : "lvl_" + text + ".PNG";
+        // Handle ALL variants (ALL, ALL_WO_RELIC, ALL_WO_EVENTS) as "all levels"
+        return text.startsWith("ALL") ? "all_lvls_" + locale.getLanguage() + ".PNG" : "lvl_" + text + ".PNG";
     }
 
     public String getOnMapIconPath() {

@@ -372,10 +372,21 @@ public class WindowAutomationWorker implements Runnable {
 
     /**
      * Get RSS type from configuration with random selection support.
+     * - ALL: All resource types including event resources (WARPSTONE, RELIC)
+     * - ALL_WO_RELIC: All except RELIC (includes WARPSTONE)
+     * - ALL_WO_EVENTS: Only standard resources (excludes WARPSTONE and RELIC)
      */
     private RssType getRssTypeFromConfig() {
         return switch (marchConfig.getRssType()) {
-            case "ALL", "ALL_WO_WS", "ALL_WO_EVENTS" -> {
+            case "ALL" -> {
+                RssType[] all = RssType.values();
+                yield all[random.nextInt(all.length)];
+            }
+            case "ALL_WO_RELIC" -> {
+                RssType[] types = RssType.allExceptRelic();
+                yield types[random.nextInt(types.length)];
+            }
+            case "ALL_WO_EVENTS" -> {
                 RssType[] standard = RssType.standardTypes();
                 yield standard[random.nextInt(standard.length)];
             }

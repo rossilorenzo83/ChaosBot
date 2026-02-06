@@ -25,7 +25,15 @@ public enum RssType {
             .filter(r -> !r.event)
             .toArray(RssType[]::new);
 
+    private static final RssType[] ALL_EXCEPT_RELIC = Arrays.stream(values())
+            .filter(r -> r != RELIC)
+            .toArray(RssType[]::new);
+
     public static RssType[] standardTypes() {
         return STANDARD_TYPES;
+    }
+
+    public static RssType[] allExceptRelic() {
+        return ALL_EXCEPT_RELIC;
     }
 }

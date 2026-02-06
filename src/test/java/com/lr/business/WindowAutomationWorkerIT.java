@@ -458,6 +458,97 @@ class WindowAutomationWorkerIT {
             "Actual attempts: " + actionAttempts.get());
     }
 
+    // ============================================================================
+    // RSS Type Config Selection Tests
+    // These tests verify that getRssTypeFromConfig() returns correct types
+    // ============================================================================
+
+    @Test
+    @Timeout(10)
+    void shouldSelectFromAllTypesWhenConfigIsALL() throws Exception {
+        // Given
+        verifyRssTypeSelection("ALL", RssType.values());
+    }
+
+    @Test
+    @Timeout(10)
+    void shouldSelectFromAllExceptRelicWhenConfigIsALL_WO_RELIC() throws Exception {
+        // Given
+        verifyRssTypeSelection("ALL_WO_RELIC", RssType.allExceptRelic());
+    }
+
+    @Test
+    @Timeout(10)
+    void shouldSelectFromStandardTypesWhenConfigIsALL_WO_EVENTS() throws Exception {
+        // Given
+        verifyRssTypeSelection("ALL_WO_EVENTS", RssType.standardTypes());
+    }
+
+    @Test
+    @Timeout(10)
+    void shouldSelectSpecificTypeWhenConfigIsExplicit() throws Exception {
+        // Given
+        verifyRssTypeSelection("WARPSTONE", new RssType[]{RssType.WARPSTONE});
+    }
+
+    /**
+     * Helper method to verify RSS type selection behavior.
+     * Runs the worker multiple times and verifies the selected types are within expected set.
+     */
+    private void verifyRssTypeSelection(String configValue, RssType[] expectedTypes) throws Exception {
+        WinUtils.WindowInfo windowInfo = createMockWindowInfo("TestWindow");
+
+        when(marchConfig.getMarchesAvailable()).thenReturn(1);
+        when(marchConfig.getMarchesIntervalMins()).thenReturn(60L);
+        when(marchConfig.getRssType()).thenReturn(configValue);
+        when(marchConfig.getTargetRssLevel()).thenReturn("5");
+        when(generalConfig.getActionIntervalMs()).thenReturn(50L);
+        when(generalConfig.getActionType()).thenReturn(ActionType.RSS_FARMING);
+        when(generalConfig.getImageQualityLowerBound()).thenReturn(0.7);
+
+        java.util.Set<RssType> capturedTypes = java.util.Collections.synchronizedSet(new java.util.HashSet<>());
+        java.util.Set<RssType> expectedSet = java.util.Set.of(expectedTypes);
+
+        doAnswer(invocation -> {
+            RssType selectedType = invocation.getArgument(1);
+            capturedTypes.add(selectedType);
+            assertTrue(expectedSet.contains(selectedType),
+                "Selected type " + selectedType + " should be in expected set for config '" + configValue + "'");
+            return null;
+        }).when(coreMechanics).findAndFarm(anyString(), any(RssType.class), any(WinUtils.WindowInfo.class), anyBoolean(), any());
+
+        Object mockLock = new Object();
+        when(coreMechanics.getGlobalAutomationLock()).thenReturn(mockLock);
+
+        java.util.concurrent.ConcurrentMap<String, java.util.Map<MainMapButtons, Double[]>> coordsMap =
+            new java.util.concurrent.ConcurrentHashMap<>();
+        coordsMap.put("TestWindow", new java.util.HashMap<>());
+        when(coreMechanics.getMainMapButtonsCoordsMap()).thenReturn(coordsMap);
+        when(coreMechanics.getCoordsMapInitLock()).thenReturn(new Object());
+
+        TestableWindowAutomationWorker worker = new TestableWindowAutomationWorker(
+            windowInfo, coreMechanics, generalConfig, marchConfig,
+            discordWebClient, random, robotFactory
+        );
+
+        CountDownLatch workerFinished = new CountDownLatch(1);
+        Thread workerThread = new Thread(() -> {
+            try {
+                worker.run();
+            } finally {
+                workerFinished.countDown();
+            }
+        });
+
+        workerThread.start();
+        Thread.sleep(200);
+        worker.requestShutdown();
+
+        boolean finished = workerFinished.await(3, TimeUnit.SECONDS);
+        assertTrue(finished, "Worker should terminate");
+        assertFalse(capturedTypes.isEmpty(), "At least one RSS type should have been selected");
+    }
+
     /**
      * Testable subclass that skips the initialization phase which requires real screen capture.
      * This allows us to directly test the processing loop behavior.
