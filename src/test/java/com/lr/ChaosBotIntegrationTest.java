@@ -130,10 +130,10 @@ class ChaosBotIntegrationTest {
 
     @Test
     void shouldSupportSpringBoot35Features() {
-        // Test Spring Boot 3.5.4 specific features
+        // Test Spring Boot 4.0 specific features
         String springVersion = org.springframework.core.SpringVersion.getVersion();
         assertNotNull(springVersion, "Spring version should not be null");
-        assertTrue(springVersion.startsWith("6."), "Should be using Spring Framework 6.x with Spring Boot 3.5.4");
+        assertTrue(springVersion.startsWith("7."), "Should be using Spring Framework 7.x with Spring Boot 4.0");
     }
 
     @Test
