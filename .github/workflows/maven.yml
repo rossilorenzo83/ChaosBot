@@ -134,27 +134,17 @@ jobs:
         key: ${{ runner.os }}-dependency-check-${{ hashFiles('**/pom.xml') }}
         restore-keys: ${{ runner.os }}-dependency-check-
 
-    - name: Debug Environment Variables
-      run: |
-        echo "Checking if secrets are available..."
-        echo "NVD_API_KEY length: ${#NVD_API_KEY}"
-        echo "OSS_INDEX_USERNAME: $OSS_INDEX_USERNAME"
-        echo "OSS_INDEX_PASSWORD length: ${#OSS_INDEX_PASSWORD}"
-      env:
-        NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
-        OSS_INDEX_USERNAME: ${{ secrets.OSS_INDEX_USERNAME }}
-        OSS_INDEX_PASSWORD: ${{ secrets.OSS_INDEX_PASSWORD }}
-
     - name: Run OWASP Dependency Check
-      run: mvn -B org.owasp:dependency-check-maven:check
+      run: |
+        mvn -B org.owasp:dependency-check-maven:check \
+          -DnvdApiKey="$NVD_API_KEY" \
+          -DossIndexUsername="$OSS_INDEX_USERNAME" \
+          -DossIndexPassword="$OSS_INDEX_PASSWORD"
       env:
-        # Security credentials (passed via environment variables, not command line)
         NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         OSS_INDEX_USERNAME: ${{ secrets.OSS_INDEX_USERNAME }}
         OSS_INDEX_PASSWORD: ${{ secrets.OSS_INDEX_PASSWORD }}
-        # Performance optimizations and secure credentials via environment
-        MAVEN_OPTS: "-Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN -DnvdApiKey=${NVD_API_KEY} -DossIndexUsername=${OSS_INDEX_USERNAME} -DossIndexPassword=${OSS_INDEX_PASSWORD}"
-        
+        MAVEN_OPTS: -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN
 
     - name: Upload Security Report
       uses: actions/upload-artifact@v4
