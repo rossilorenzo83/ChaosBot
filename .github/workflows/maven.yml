@@ -148,13 +148,15 @@ jobs:
     - name: Run OWASP Dependency Check
       run: mvn -B org.owasp:dependency-check-maven:check
       env:
-        # Security credentials (passed via environment variables, not command line)
+        # Credentials are read directly from these env vars by pom.xml
+        # via Maven's ${env.X} interpolation. Do NOT bake them into
+        # MAVEN_OPTS — ${VAR} inside a YAML env: value is a literal
+        # string, not a shell expansion.
         NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         OSS_INDEX_USERNAME: ${{ secrets.OSS_INDEX_USERNAME }}
         OSS_INDEX_PASSWORD: ${{ secrets.OSS_INDEX_PASSWORD }}
-        # Performance optimizations and secure credentials via environment
-        MAVEN_OPTS: "-Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN -DnvdApiKey=${NVD_API_KEY} -DossIndexUsername=${OSS_INDEX_USERNAME} -DossIndexPassword=${OSS_INDEX_PASSWORD}"
-        
+        MAVEN_OPTS: "-Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN"
+
 
     - name: Upload Security Report
       uses: actions/upload-artifact@v4
