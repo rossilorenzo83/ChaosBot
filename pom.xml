@@ -113,7 +113,7 @@
             <plugin>
                 <groupId>com.github.spotbugs</groupId>
                 <artifactId>spotbugs-maven-plugin</artifactId>
-                <version>4.9.8.2</version>
+                <version>4.9.8.3</version>
                 <configuration>
                     <effort>Max</effort>
                     <threshold>Low</threshold>
@@ -134,13 +134,13 @@
                     </formats>
                     <prettyPrint>true</prettyPrint>
                     <!-- NVD API Configuration (NIST) -->
-                    <nvdApiKey>${nvdApiKey}</nvdApiKey>
+                    <nvdApiKey>${env.NVD_API_KEY}</nvdApiKey>
                     <nvdMaxRetryCount>10</nvdMaxRetryCount>
                     <nvdApiDelay>2000</nvdApiDelay>
                     <nvdValidForHours>24</nvdValidForHours>
                     <!-- OSS Index Configuration (Sonatype) -->
-                    <ossIndexUsername>${ossIndexUsername}</ossIndexUsername>
-                    <ossIndexPassword>${ossIndexPassword}</ossIndexPassword>
+                    <ossIndexUsername>${env.OSS_INDEX_USERNAME}</ossIndexUsername>
+                    <ossIndexPassword>${env.OSS_INDEX_PASSWORD}</ossIndexPassword>
                     <!-- Performance optimizations -->
                     <dataDirectory>~/.dependency-check/data</dataDirectory>
                     <connectionTimeout>60000</connectionTimeout>
@@ -195,6 +195,52 @@
         <developerConnection>scm:git:https://github.com/rossilorenzo83/ChaosBot.git</developerConnection>
         <tag>HEAD</tag>
   </scm>
+
+    <!--
+        Pin transitive dependencies to patched versions for Dependabot alerts
+        that are not yet absorbed by spring-boot-starter-parent. These overrides
+        take precedence over the parent BOM's management.
+    -->
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>io.netty</groupId>
+                <artifactId>netty-bom</artifactId>
+                <version>4.2.13.Final</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework</groupId>
+                <artifactId>spring-framework-bom</artifactId>
+                <version>7.0.7</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>tools.jackson</groupId>
+                <artifactId>jackson-bom</artifactId>
+                <version>3.1.3</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcprov-jdk18on</artifactId>
+                <version>1.84</version>
+            </dependency>
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcpkix-jdk18on</artifactId>
+                <version>1.84</version>
+            </dependency>
+            <dependency>
+                <groupId>org.assertj</groupId>
+                <artifactId>assertj-core</artifactId>
+                <version>3.27.7</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
         <dependency>

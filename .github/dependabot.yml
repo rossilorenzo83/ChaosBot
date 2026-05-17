@@ -18,3 +18,7 @@ updates:
           - "minor"
           - "patch"
           - "major"
+      security:
+        applies-to: security-updates
+        patterns:
+          - "*"

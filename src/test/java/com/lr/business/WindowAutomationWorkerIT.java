@@ -304,6 +304,7 @@ class WindowAutomationWorkerIT {
         // When
         workerThread.start();
         boolean finished = workerFinished.await(3, TimeUnit.SECONDS);
+        workerThread.join(1000);
 
         // Then
         assertTrue(finished, "Worker should terminate gracefully even after initialization error");
