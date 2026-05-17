@@ -10,8 +10,8 @@ import org.opencv.core.Mat;
 import org.opencv.imgcodecs.Imgcodecs;
 import org.springframework.web.reactive.function.client.WebClient;
 
-import java.awt.*;
 import java.awt.AWTException;
+import java.awt.Robot;
 import java.io.File;
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -53,6 +53,8 @@ public class WindowAutomationWorker implements Runnable {
     private Boolean firstRun = true;
     private Long timeLastActionPerformed;
     private volatile boolean shutdownRequested = false;
+    private int consecutiveFailures = 0;
+    private static final int MAX_FAILURES_BEFORE_REINIT = 3;
 
     /**
      * Creates a new window automation worker.
@@ -102,7 +104,7 @@ public class WindowAutomationWorker implements Runnable {
         } catch (InterruptedException e) {
             log.info("Worker interrupted for window: {}", windowInfo.getTitle());
             Thread.currentThread().interrupt(); // Preserve interrupt status
-        } catch (AWTException | IOException | URISyntaxException | TesseractException e) {
+        } catch (AWTException | IOException | URISyntaxException e) {
             log.error("Fatal error in automation worker for window: {}", windowInfo.getTitle(), e);
 
         } finally {
@@ -140,8 +142,6 @@ public class WindowAutomationWorker implements Runnable {
                 if (mainMapButton.equals(MainMapButtons.ENCAMPMENTS)) {
                     hasEncampments = false;
                     log.info("No encampments found for window: {}", windowInfo.getTitle());
-                } else {
-                    log.error("Failed to find coordinates for {}: {}", mainMapButton.name(), e.getMessage());
                 }
             }
         }
@@ -181,22 +181,40 @@ public class WindowAutomationWorker implements Runnable {
 
         // Now add this window's coordinates (thread-safe due to ConcurrentHashMap)
         existingCoordsMap.put(windowInfo.getTitle(), currentWindowCoords);
+
+        // Log stored coordinates for debugging
+        Double[] searchCoords = currentWindowCoords.get(MainMapButtons.SEARCH);
+        log.info("STORED coords for window '{}': SEARCH=({}, {})",
+            windowInfo.getTitle(),
+            searchCoords != null ? searchCoords[0] : "NULL",
+            searchCoords != null ? searchCoords[1] : "NULL");
     }
 
     /**
      * Main processing loop for the window.
      * Loop continues until shutdown is requested or thread is interrupted.
+     *
+     * IMPORTANT: Action failures are caught and logged but don't terminate the loop.
+     * The worker will continue and retry on the next interval.
      */
-    private void processWindowLoop() throws AWTException, IOException, URISyntaxException, InterruptedException, TesseractException {
+    private void processWindowLoop() throws InterruptedException {
         log.info("Entering main processing loop for window: {}", windowInfo.getTitle());
 
         while (!shutdownRequested && !Thread.currentThread().isInterrupted()) {
             // Check if timer expired and reset marches
-            if (availMarches == 0 &&
-                (System.currentTimeMillis() - timeLastActionPerformed) > (marchConfig.getMarchesIntervalMins() * 60 * 1000)) {
-                log.info("Timer expired for window: {}. Resetting marches.", windowInfo.getTitle());
-                availMarches = marchConfig.getMarchesAvailable();
-                firstRun = true;
+            if (availMarches == 0) {
+                long elapsedMs = System.currentTimeMillis() - timeLastActionPerformed;
+                long intervalMs = marchConfig.getMarchesIntervalMins() * 60L * 1000L;
+
+                log.debug("Timer check for window: {} - elapsed: {}ms, interval: {}ms, remaining: {}ms",
+                    windowInfo.getTitle(), elapsedMs, intervalMs, intervalMs - elapsedMs);
+
+                if (elapsedMs > intervalMs) {
+                    log.info("Timer expired for window: {}. Resetting marches to {}.",
+                        windowInfo.getTitle(), marchConfig.getMarchesAvailable());
+                    availMarches = marchConfig.getMarchesAvailable();
+                    firstRun = true;
+                }
             }
 
             // Process actions if marches available
@@ -204,19 +222,79 @@ public class WindowAutomationWorker implements Runnable {
                 log.info("Processing action for window: {} (marches remaining: {})",
                     windowInfo.getTitle(), availMarches);
 
-                File tmpFolder = LoadLibs.extractTessResources("win32-x86-64");
-                log.info("Tesseract tmp folder path: {}", tmpFolder.getPath());
-                System.setProperty("java.library.path", tmpFolder.getPath());
+                try {
+                    File tmpFolder = LoadLibs.extractTessResources("win32-x86-64");
+                    log.debug("Tesseract tmp folder path: {}", tmpFolder.getPath());
+                    System.setProperty("java.library.path", tmpFolder.getPath());
 
-                performAction();
+                    performAction();
 
-                availMarches--;
-                firstRun = false;
-                timeLastActionPerformed = System.currentTimeMillis();
+                    // Only decrement marches and update time on SUCCESS
+                    availMarches--;
+                    firstRun = false;
+                    timeLastActionPerformed = System.currentTimeMillis();
+                    consecutiveFailures = 0; // Reset failure counter on success
+
+                    log.info("Action completed successfully for window: {}. Marches remaining: {}",
+                        windowInfo.getTitle(), availMarches);
+
+                } catch (InterruptedException e) {
+                    // Re-throw InterruptedException to allow graceful shutdown
+                    throw e;
+                } catch (Exception e) {
+                    consecutiveFailures++;
+
+                    // Catch ALL exceptions - loop must NEVER die from errors like:
+                    // ImageNotMatchedException, template not found, coords not found, etc.
+                    log.warn("Action failed for window: {} (failure {}/{}). Error: {} - {}",
+                        windowInfo.getTitle(), consecutiveFailures, MAX_FAILURES_BEFORE_REINIT,
+                        e.getClass().getSimpleName(), e.getMessage());
+
+                    // Check if we need to re-initialize (likely coords issue)
+                    if (consecutiveFailures >= MAX_FAILURES_BEFORE_REINIT) {
+                        log.info("Too many consecutive failures for window: {}. Attempting recovery...",
+                            windowInfo.getTitle());
+
+                        try {
+                            // Try to return to main map by pressing ESC
+                            Robot recoveryRobot = getRobot();
+                            recoveryRobot.keyPress(java.awt.event.KeyEvent.VK_ESCAPE);
+                            recoveryRobot.keyRelease(java.awt.event.KeyEvent.VK_ESCAPE);
+                            Thread.sleep(1000);
+
+                            // Re-initialize window coordinates
+                            initializeWindow();
+                            consecutiveFailures = 0;
+                            firstRun = true;
+                            log.info("Recovery successful for window: {}", windowInfo.getTitle());
+
+                        } catch (Exception reinitEx) {
+                            log.error("Recovery failed for window: {}. Will keep retrying. Error: {}",
+                                windowInfo.getTitle(), reinitEx.getMessage());
+                        }
+                    }
+
+                    // Still decrement marches to prevent infinite retry loop
+                    availMarches--;
+                    timeLastActionPerformed = System.currentTimeMillis();
+
+                    // Small delay before continuing to avoid rapid failure loops
+                    Thread.sleep(generalConfig.getActionIntervalMs());
+                }
             }
 
             // Small sleep to prevent tight loop when no marches available
             if (availMarches == 0) {
+                // Log status every 5 minutes to confirm loop is running
+                long elapsedMs = System.currentTimeMillis() - timeLastActionPerformed;
+                long intervalMs = marchConfig.getMarchesIntervalMins() * 60L * 1000L;
+                long remainingSec = (intervalMs - elapsedMs) / 1000;
+
+                if (remainingSec % 300 == 0 && remainingSec >= 0) {
+                    log.info("Waiting for timer reset on window: {}. {} minutes remaining until next action cycle.",
+                        windowInfo.getTitle(), remainingSec / 60);
+                }
+
                 Thread.sleep(1000); // Check every second for timer expiration
             }
         }
@@ -235,6 +313,12 @@ public class WindowAutomationWorker implements Runnable {
 
     /**
      * Perform the configured action type.
+     *
+     * NOTE: Global automation lock is now acquired INSIDE CoreMechanics methods,
+     * only during actual mouse/keyboard operations. This allows parallel execution of:
+     * - Screen captures (each thread has its own Robot)
+     * - Image processing and template matching
+     * Only mouse movements and clicks are serialized.
      */
     private void performAction() throws AWTException, IOException, URISyntaxException, InterruptedException, TesseractException {
         switch (generalConfig.getActionType()) {
@@ -288,11 +372,24 @@ public class WindowAutomationWorker implements Runnable {
 
     /**
      * Get RSS type from configuration with random selection support.
+     * - ALL: All resource types including event resources (WARPSTONE, RELIC)
+     * - ALL_WO_RELIC: All except RELIC (includes WARPSTONE)
+     * - ALL_WO_EVENTS: Only standard resources (excludes WARPSTONE and RELIC)
      */
     private RssType getRssTypeFromConfig() {
         return switch (marchConfig.getRssType()) {
-            case "ALL" -> RssType.values()[random.nextInt(RssType.values().length)];
-            case "ALL_WO_WS" -> RssType.values()[random.nextInt(RssType.values().length - 1)];
+            case "ALL" -> {
+                RssType[] all = RssType.values();
+                yield all[random.nextInt(all.length)];
+            }
+            case "ALL_WO_RELIC" -> {
+                RssType[] types = RssType.allExceptRelic();
+                yield types[random.nextInt(types.length)];
+            }
+            case "ALL_WO_EVENTS" -> {
+                RssType[] standard = RssType.standardTypes();
+                yield standard[random.nextInt(standard.length)];
+            }
             default -> RssType.valueOf(marchConfig.getRssType());
         };
     }

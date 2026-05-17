@@ -44,11 +44,28 @@ public class CoreMechanics {
     public static final int SCROLL_AMOUNT = 20;
 
     /**
-     * Lock for window focus operations to prevent multiple threads from interfering with each other's window focus.
-     * Windows can only have one focused window at a time.
-     * This lock ensures atomic window-focus + action sequences across all worker threads.
+     * Global lock for ALL automation operations.
+     *
+     * CRITICAL: Even with separate Robot instances per thread, there is only ONE physical
+     * mouse cursor on the system. All Robot.mouseMove() calls control the same cursor.
+     *
+     * This lock ensures that entire automation sequences (find -> click -> wait -> verify)
+     * are executed atomically without interference from other threads.
+     *
+     * Without this, Thread A might:
+     *   1. Move mouse to Window A button
+     *   2. [Thread B moves mouse to Window B]  <-- RACE CONDITION
+     *   3. Click (now clicking wrong location!)
      */
-    private final Object windowFocusLock = new Object();
+    private final Object globalAutomationLock = new Object();
+
+    /**
+     * Gets the global automation lock for serializing multi-window operations.
+     * Workers must acquire this lock before performing any automation sequence.
+     */
+    public Object getGlobalAutomationLock() {
+        return globalAutomationLock;
+    }
 
     /**
      * Lock for thread-safe initialization of mainMapButtonsCoordsMap.
@@ -90,13 +107,25 @@ public class CoreMechanics {
 
 
     public void findAndFarm(String rssLevel, RssType rssType, WinUtils.WindowInfo windowInfo, boolean hasEncampment, Robot robot) throws InterruptedException, AWTException, IOException, URISyntaxException {
+        // Acquire global lock - only one window can control mouse at a time
+        synchronized (globalAutomationLock) {
+            findAndFarmInternal(rssLevel, rssType, windowInfo, hasEncampment, robot);
+        }
+    }
 
-        //gotoMainMap with keystroke
+    private void findAndFarmInternal(String rssLevel, RssType rssType, WinUtils.WindowInfo windowInfo, boolean hasEncampment, Robot robot) throws InterruptedException, AWTException, IOException, URISyntaxException {
+        WinUtils.focusWindow(windowInfo.getTitle());
+        Thread.sleep(200);
+
         Map<MainMapButtons, Double[]> windowCoords = mainMapButtonsCoordsMap.get(windowInfo.getTitle());
         if (windowCoords == null) {
             throw new IllegalStateException("No coordinates found for window: " + windowInfo.getTitle());
         }
-        moveAndClick(windowCoords.get(MainMapButtons.SEARCH), robot);
+        Double[] searchCoords = windowCoords.get(MainMapButtons.SEARCH);
+        log.info("Window '{}' SEARCH coords: ({}, {})", windowInfo.getTitle(),
+            searchCoords != null ? searchCoords[0] : "NULL",
+            searchCoords != null ? searchCoords[1] : "NULL");
+        moveAndClick(searchCoords, robot);
 
         String searchViewPath = takeScreenCapture(windowInfo, robot);
         Mat searchScreen = Imgcodecs.imread(searchViewPath, CONVERT_IMG_FLAG);
@@ -113,10 +142,10 @@ public class CoreMechanics {
             searchViewPath = takeScreenCapture(windowInfo, robot);
             searchScreen = Imgcodecs.imread(searchViewPath, CONVERT_IMG_FLAG);
 
-            // Special handling for warpstone - requires scrolling to find in resource list
+            // Event resources (warpstone, relic) require scrolling to find in resource list
             Double[] rssTypeChoice;
-            if (rssType == RssType.WARPSTONE) {
-                rssTypeChoice = findWarpstoneIconWithScrolling(searchScreen, windowInfo, robot);
+            if (rssType.isEvent()) {
+                rssTypeChoice = findScrollableRssIconWithScrolling(rssType, searchScreen, windowInfo, rssExpander, robot);
             } else {
                 rssTypeChoice = findCoordsOnScreenFlexible(SearchViewButtons.getEnumFromRssType(rssType).getImgPath(), searchScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
             }
@@ -230,12 +259,25 @@ public class CoreMechanics {
     }
 
     public void armyFarming(String armyLvl, int armyPreset, WinUtils.WindowInfo windowInfo, boolean hasEncampment, Boolean isSkelly, Boolean isFirstRun, Robot robot) throws IOException, AWTException, InterruptedException, URISyntaxException {
+        // Acquire global lock - only one window can control mouse at a time
+        synchronized (globalAutomationLock) {
+            armyFarmingInternal(armyLvl, armyPreset, windowInfo, hasEncampment, isSkelly, isFirstRun, robot);
+        }
+    }
+
+    private void armyFarmingInternal(String armyLvl, int armyPreset, WinUtils.WindowInfo windowInfo, boolean hasEncampment, Boolean isSkelly, Boolean isFirstRun, Robot robot) throws IOException, AWTException, InterruptedException, URISyntaxException {
+        WinUtils.focusWindow(windowInfo.getTitle());
+        Thread.sleep(200);
 
         Map<MainMapButtons, Double[]> windowCoords = mainMapButtonsCoordsMap.get(windowInfo.getTitle());
         if (windowCoords == null) {
             throw new IllegalStateException("No coordinates found for window: " + windowInfo.getTitle());
         }
-        moveAndClick(windowCoords.get(MainMapButtons.SEARCH), robot);
+        Double[] searchCoords = windowCoords.get(MainMapButtons.SEARCH);
+        log.info("Window '{}' SEARCH coords (armyFarming): ({}, {})", windowInfo.getTitle(),
+            searchCoords != null ? searchCoords[0] : "NULL",
+            searchCoords != null ? searchCoords[1] : "NULL");
+        moveAndClick(searchCoords, robot);
         String searchViewPath = takeScreenCapture(windowInfo, robot);
         Mat searchScreen = Imgcodecs.imread(searchViewPath, CONVERT_IMG_FLAG);
 
@@ -372,17 +414,20 @@ public class CoreMechanics {
     }
 
     public void challengeStats(WinUtils.WindowInfo windowInfo, WebClient discordWebClient, ChallengeViewButtons challengeViewButtons, Robot robot) throws IOException, AWTException, URISyntaxException, InterruptedException, TesseractException {
+        // Acquire global lock - only one window can control mouse at a time
+        synchronized (globalAutomationLock) {
+            challengeStatsInternal(windowInfo, discordWebClient, challengeViewButtons, robot);
+        }
+    }
 
-        //Get focus
-        moveAndClick(findWindowCenterCoords(windowInfo), robot);
-
+    private void challengeStatsInternal(WinUtils.WindowInfo windowInfo, WebClient discordWebClient, ChallengeViewButtons challengeViewButtons, Robot robot) throws IOException, AWTException, URISyntaxException, InterruptedException, TesseractException {
+        WinUtils.focusWindow(windowInfo.getTitle());
+        Thread.sleep(200);
 
         try {
-            synchronized (windowFocusLock) {
-                robot.keyPress(KeyEvent.VK_D);
-                robot.keyRelease(KeyEvent.VK_D);
-                Thread.sleep(generalConfig.getActionIntervalMs());
-            }
+            robot.keyPress(KeyEvent.VK_D);
+            robot.keyRelease(KeyEvent.VK_D);
+            Thread.sleep(generalConfig.getActionIntervalMs());
 
             String challengePage = takeScreenCapture(windowInfo, robot);
             Mat locationSelectionScreen = Imgcodecs.imread(challengePage, CONVERT_IMG_FLAG);
@@ -395,10 +440,8 @@ public class CoreMechanics {
             Mat pastChallengeCurrentPageMat = pastChallengePageMat;
 
             Double[] bottomCoords = findWindowBottomCoords(windowInfo);
-            synchronized (windowFocusLock) {
-                robot.mouseMove(bottomCoords[0].intValue(), bottomCoords[1].intValue());
-                Thread.sleep(generalConfig.getActionIntervalMs());
-            }
+            robot.mouseMove(bottomCoords[0].intValue(), bottomCoords[1].intValue());
+            Thread.sleep(generalConfig.getActionIntervalMs());
 
             int mainScrollCounter = 0;
             boolean prevNotFound;
@@ -433,21 +476,15 @@ public class CoreMechanics {
                     do {
 
                         bottomCoords = findWindowBottomCoords(windowInfo);
-                        synchronized (windowFocusLock) {
-                            robot.mouseMove(bottomCoords[0].intValue(), bottomCoords[1].intValue());
-                            Thread.sleep(generalConfig.getActionIntervalMs());
-                        }
-
+                        robot.mouseMove(bottomCoords[0].intValue(), bottomCoords[1].intValue());
+                        Thread.sleep(generalConfig.getActionIntervalMs());
 
                         challengeScorersScreenCapture = challengeScorersCurrentScreenCapture;
 
                         contextText.append(ScreenUtils.extractTextFromImage(challengeScorersScreenCapturePath, ocrEngine));
 
-
-                        synchronized (windowFocusLock) {
-                            robot.mouseWheel(3);
-                            Thread.sleep(generalConfig.getActionIntervalMs());
-                        }
+                        robot.mouseWheel(3);
+                        Thread.sleep(generalConfig.getActionIntervalMs());
 
                         scrollCounter++;
                         String challengeScorersCurrentScreenCapturePath = takeScreenCapture(windowInfo, "scores" + scrollCounter, robot);
@@ -463,15 +500,13 @@ public class CoreMechanics {
                     publishContentOnDiscord(discordWebClient, discordRestbuilder);
 
 
-                    synchronized (windowFocusLock) {
-                        robot.keyPress(VK_ESCAPE);
-                        robot.keyRelease(VK_ESCAPE);
-                        Thread.sleep(generalConfig.getActionIntervalMs());
+                    robot.keyPress(VK_ESCAPE);
+                    robot.keyRelease(VK_ESCAPE);
+                    Thread.sleep(generalConfig.getActionIntervalMs());
 
-                        robot.keyPress(VK_ESCAPE);
-                        robot.keyRelease(VK_ESCAPE);
-                        Thread.sleep(generalConfig.getActionIntervalMs());
-                    }
+                    robot.keyPress(VK_ESCAPE);
+                    robot.keyRelease(VK_ESCAPE);
+                    Thread.sleep(generalConfig.getActionIntervalMs());
                     prevNotFound = false;
 
 
@@ -485,10 +520,8 @@ public class CoreMechanics {
                 log.info("Arrived at {} scrolls", mainScrollCounter);
                 //Scroll
                 bottomCoords = findWindowBottomCoords(windowInfo);
-                synchronized (windowFocusLock) {
-                    robot.mouseMove(bottomCoords[0].intValue(), bottomCoords[1].intValue());
-                    Thread.sleep(generalConfig.getActionIntervalMs());
-                }
+                robot.mouseMove(bottomCoords[0].intValue(), bottomCoords[1].intValue());
+                Thread.sleep(generalConfig.getActionIntervalMs());
 
                 proceedScrolling(mainScrollCounter, prevNotFound, robot);
 
@@ -498,15 +531,12 @@ public class CoreMechanics {
             while (mainScrollCounter < SCROLL_AMOUNT);
 
             //Get back to map screen
-            synchronized (windowFocusLock) {
-                robot.keyPress(VK_ESCAPE);
-                robot.keyRelease(VK_ESCAPE);
-                Thread.sleep(generalConfig.getActionIntervalMs());
-            }
+            robot.keyPress(VK_ESCAPE);
+            robot.keyRelease(VK_ESCAPE);
+            Thread.sleep(generalConfig.getActionIntervalMs());
 
         } catch (ImageNotMatchedException e) {
             log.error("Error in challengeStats: {}", e.getMessage());
-            // Go back to main screen when image recognition fails
             if (!e.getInMainMap()) {
                 goBackToMainMap(robot);
             }
@@ -525,22 +555,29 @@ public class CoreMechanics {
         }
     }
 
-    private void proceedScrolling(int mainScrollCounter, boolean prevNotFound, Robot robot) throws InterruptedException, AWTException {
-        synchronized (windowFocusLock) {
-            if (prevNotFound) {
+    private void proceedScrolling(int mainScrollCounter, boolean prevNotFound, Robot robot) throws InterruptedException {
+        if (prevNotFound) {
+            robot.mouseWheel(1);
+            Thread.sleep(generalConfig.getActionIntervalMs());
+        } else {
+            log.info("Scrolling {} times", mainScrollCounter);
+            for (int i = 0; i < mainScrollCounter; i++) {
                 robot.mouseWheel(1);
                 Thread.sleep(generalConfig.getActionIntervalMs());
-            } else {
-                log.info("Scrolling {} times", mainScrollCounter);
-                for (int i = 0; i < mainScrollCounter; i++) {
-                    robot.mouseWheel(1);
-                    Thread.sleep(generalConfig.getActionIntervalMs());
-                }
             }
         }
     }
 
     public void receivedRss(WinUtils.WindowInfo windowInfo, WebClient discordWebClient, Robot robot) throws InterruptedException, IOException, AWTException, URISyntaxException, TesseractException {
+        // Acquire global lock - only one window can control mouse at a time
+        synchronized (globalAutomationLock) {
+            receivedRssInternal(windowInfo, discordWebClient, robot);
+        }
+    }
+
+    private void receivedRssInternal(WinUtils.WindowInfo windowInfo, WebClient discordWebClient, Robot robot) throws InterruptedException, IOException, AWTException, URISyntaxException, TesseractException {
+        WinUtils.focusWindow(windowInfo.getTitle());
+        Thread.sleep(200);
 
         try {
             Map<MainMapButtons, Double[]> windowCoords = mainMapButtonsCoordsMap.get(windowInfo.getTitle());
@@ -582,7 +619,7 @@ public class CoreMechanics {
                     String donor = ScreenUtils.extractTextFromImage(donationWithDonorCapturePath, ocrEngine);
                     String[] segs = donor.split("\n");
 
-                    StringBuffer contextText = new StringBuffer(segs[segs.length - 1]);
+                    StringBuilder contextText = new StringBuilder(segs[segs.length - 1]);
 
 
                     moveAndClick(rssReceivedCoords, robot);
@@ -595,12 +632,9 @@ public class CoreMechanics {
                     log.info("Text extracted: {}", contextText);
                     discordRestbuilder.part("content", contextText.toString());
 
-
-                    synchronized (windowFocusLock) {
-                        robot.keyPress(VK_ESCAPE);
-                        robot.keyRelease(VK_ESCAPE);
-                        Thread.sleep(generalConfig.getActionIntervalMs());
-                    }
+                    robot.keyPress(VK_ESCAPE);
+                    robot.keyRelease(VK_ESCAPE);
+                    Thread.sleep(generalConfig.getActionIntervalMs());
                     prevNotFound = false;
 
                     publishContentOnDiscord(discordWebClient, discordRestbuilder);
@@ -622,15 +656,12 @@ public class CoreMechanics {
             while (mainScrollCounter < SCROLL_AMOUNT);
 
             //Get back to map screen
-            synchronized (windowFocusLock) {
-                robot.keyPress(VK_ESCAPE);
-                robot.keyRelease(VK_ESCAPE);
-                Thread.sleep(generalConfig.getActionIntervalMs());
-            }
+            robot.keyPress(VK_ESCAPE);
+            robot.keyRelease(VK_ESCAPE);
+            Thread.sleep(generalConfig.getActionIntervalMs());
 
         } catch (ImageNotMatchedException e) {
             log.error("Error in receivedRss: {}", e.getMessage());
-            // Go back to main screen when image recognition fails
             if (!e.getInMainMap()) {
                 goBackToMainMap(robot);
             }
@@ -659,116 +690,65 @@ public class CoreMechanics {
         return new Double[]{screenRect.getX() + screenRect.getWidth() / 2, screenRect.getY() + screenRect.getHeight() * 2 / 3};
     }
 
-    /**
-     * Move mouse to coordinates and click with window focus lock.
-     * The lock ensures that window focus + click operations are atomic and not interrupted by other threads.
-     */
-    private void moveAndClick(Double[] coords, Robot robot) throws InterruptedException, AWTException {
-        synchronized (windowFocusLock) {
-            robot.mouseMove(coords[0].intValue(), coords[1].intValue());
-            Thread.sleep(50); // Small delay to ensure window receives focus
-            robot.mousePress(BUTTON1_DOWN_MASK);
-            robot.mouseRelease(BUTTON1_DOWN_MASK);
-            Thread.sleep(generalConfig.getActionIntervalMs());
-        }
+    private void moveAndClick(Double[] coords, Robot robot) throws InterruptedException {
+        robot.mouseMove(coords[0].intValue(), coords[1].intValue());
+        robot.mousePress(BUTTON1_DOWN_MASK);
+        robot.mouseRelease(BUTTON1_DOWN_MASK);
+        Thread.sleep(generalConfig.getActionIntervalMs());
     }
 
 
-    private void goBackToMainMap(Robot robot) throws InterruptedException, AWTException {
+    private void goBackToMainMap(Robot robot) throws InterruptedException {
         log.info("Attempting to return to main map screen");
-
-        synchronized (windowFocusLock) {
-            // Press ESC multiple times to ensure we get back to main map from any nested screen
-            for (int i = 0; i < 3; i++) {
-                robot.keyPress(VK_ESCAPE);
-                robot.keyRelease(VK_ESCAPE);
-                Thread.sleep(500); // Short delay between key presses
-            }
-
-            // Longer delay to allow UI transitions to complete
-            Thread.sleep(generalConfig.getActionIntervalMs() * 2);
-        }
-
+        robot.keyPress(VK_ESCAPE);
+        robot.keyRelease(VK_ESCAPE);
+        Thread.sleep(generalConfig.getActionIntervalMs());
         log.info("Returned to main map screen");
     }
 
 
     /**
-     * Find warpstone icon with scrolling logic since it's not immediately visible on screen
+     * Find a scrollable resource icon (warpstone, relic, etc.) that requires scrolling
+     * in the resource list since it's not immediately visible on screen.
      */
-    private Double[] findWarpstoneIconWithScrolling(Mat searchScreen, WinUtils.WindowInfo windowInfo, Robot robot) throws InterruptedException, AWTException, IOException, URISyntaxException, ImageNotMatchedException {
-        log.info("Looking for warpstone icon with scrolling logic (primarily downward)");
+    private Double[] findScrollableRssIconWithScrolling(RssType rssType, Mat searchScreen, WinUtils.WindowInfo windowInfo, Double[] expanderCoords, Robot robot) throws InterruptedException, AWTException, IOException, URISyntaxException, ImageNotMatchedException {
+        String iconPath = SearchViewButtons.getEnumFromRssType(rssType).getImgPath();
+        log.info("Looking for {} icon with scrolling logic, scrolling immediately", rssType);
 
-        // First, try to find warpstone without scrolling
-        try {
-            Double[] warpstoneIconCoords = findCoordsOnScreenFlexible(SearchViewButtons.WARPSTONE_ICON.getImgPath(), searchScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
-            log.info("Warpstone icon found without scrolling");
-            return warpstoneIconCoords;
-        } catch (ImageNotMatchedException e) {
-            log.info("Warpstone icon not visible, starting scrolling search...");
-        }
-
-        // Position mouse over the resource list area and ensure it's focused
-        Double[] resourceListCoords = findResourceListScrollPosition(windowInfo);
-        synchronized (windowFocusLock) {
-            robot.mouseMove(resourceListCoords[0].intValue(), resourceListCoords[1].intValue());
-            Thread.sleep(generalConfig.getActionIntervalMs());
-
-            // Click to ensure the scrollable area has focus
-            robot.mousePress(BUTTON1_DOWN_MASK);
-            robot.mouseRelease(BUTTON1_DOWN_MASK);
-            Thread.sleep(generalConfig.getActionIntervalMs());
-        }
-
-        // Scroll down to find warpstone (primary direction based on user feedback)
-        return performWarpstoneScroll(windowInfo, 1, "down", 8, robot);
-    }
-
-    /**
-     * Calculate the optimal mouse position for scrolling the resource list
-     */
-    private Double[] findResourceListScrollPosition(WinUtils.WindowInfo windowInfo) {
-        Rectangle windowRect = new Rectangle(windowInfo.getRect().left, windowInfo.getRect().top, 
-                Math.abs(windowInfo.getRect().right - windowInfo.getRect().left), 
+        // Position mouse in the lower third of the window, left third of the width (inside the scrollable dropdown)
+        Rectangle windowRect = new Rectangle(windowInfo.getRect().left, windowInfo.getRect().top,
+                Math.abs(windowInfo.getRect().right - windowInfo.getRect().left),
                 Math.abs(windowInfo.getRect().bottom - windowInfo.getRect().top));
-        
-        // Position mouse on the left side of the window where resource icons are typically located
-        // About 1/4 from the left and middle height
-        double x = windowRect.getX() + windowRect.getWidth() * 0.25;
-        double y = windowRect.getY() + windowRect.getHeight() * 0.5;
-        
-        return new Double[]{x, y};
+        double x = windowRect.getX() + windowRect.getWidth() / 6.0;
+        double y = windowRect.getY() + windowRect.getHeight() * 5.0 / 6.0;
+        Double[] scrollPos = new Double[]{x, y};
+        return performScrollToFindIcon(iconPath, rssType.name(), windowInfo, scrollPos, 1, "down", 8, robot);
     }
 
-    /**
-     * Perform focused scrolling to find warpstone icon (using same pattern as working scroll methods)
-     */
-    private Double[] performWarpstoneScroll(WinUtils.WindowInfo windowInfo, int wheelDirection, String directionName, int maxScrolls, Robot robot) throws InterruptedException, IOException, URISyntaxException, ImageNotMatchedException, AWTException {
-        log.info("Scrolling {} to find warpstone (max {} scrolls)", directionName, maxScrolls);
-        
-        for (int scrollCount = 0; scrollCount < maxScrolls; scrollCount++) {
-            // Perform scroll using same pattern as successful scroll methods
-            synchronized (windowFocusLock) {
-                robot.mouseWheel(wheelDirection);
-                Thread.sleep(generalConfig.getActionIntervalMs()); // Use same delay as working methods
-            }
 
-            // Take screenshot after scroll
+    private Double[] performScrollToFindIcon(String iconPath, String iconName, WinUtils.WindowInfo windowInfo, Double[] scrollPos, int wheelDirection, String directionName, int maxScrolls, Robot robot) throws InterruptedException, IOException, URISyntaxException, ImageNotMatchedException, AWTException {
+        log.info("Scrolling {} to find {} (max {} scrolls)", directionName, iconName, maxScrolls);
+
+        robot.mouseMove(scrollPos[0].intValue(), scrollPos[1].intValue());
+
+        for (int scrollCount = 0; scrollCount < maxScrolls; scrollCount++) {
+            robot.mouseWheel(wheelDirection);
+            Thread.sleep(generalConfig.getActionIntervalMs());
+
             String searchViewPath = takeScreenCapture(windowInfo, robot);
             Mat currentScreen = Imgcodecs.imread(searchViewPath, CONVERT_IMG_FLAG);
-            
-            // Try to find warpstone
+
             try {
-                Double[] warpstoneIconCoords = findCoordsOnScreenFlexible(SearchViewButtons.WARPSTONE_ICON.getImgPath(), currentScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
-                log.info("Warpstone icon found after {} {} scrolls", scrollCount + 1, directionName);
-                return warpstoneIconCoords;
+                Double[] iconCoords = findCoordsOnScreenFlexible(iconPath, currentScreen, windowInfo, false, generalConfig.getImageQualityLowerBound());
+                log.info("{} icon found after {} {} scrolls", iconName, scrollCount + 1, directionName);
+                return iconCoords;
             } catch (ImageNotMatchedException e) {
-                log.info("Warpstone not found after scroll {} {}, continuing...", scrollCount + 1, directionName);
+                log.info("{} not found after scroll {} {}, continuing...", iconName, scrollCount + 1, directionName);
             }
         }
-        
-        log.error("Warpstone icon not found after {} {} scrolls", maxScrolls, directionName);
-        throw new ImageNotMatchedException("Warpstone icon not found after scrolling " + directionName, false);
+
+        log.error("{} icon not found after {} {} scrolls", iconName, maxScrolls, directionName);
+        throw new ImageNotMatchedException(iconName + " icon not found after scrolling " + directionName, false);
     }
 
 

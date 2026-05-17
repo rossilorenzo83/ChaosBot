@@ -1,14 +1,12 @@
 package com.lr;
 
-import com.lr.business.*;
+import com.lr.business.CoreMechanics;
+import com.lr.business.WindowAutomationWorker;
 import com.lr.config.GeneralConfig;
 import com.lr.config.MarchConfig;
 import com.lr.utils.WinUtils;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
-import net.sourceforge.tess4j.TesseractException;
-import net.sourceforge.tess4j.util.LoadLibs;
-import org.opencv.core.Mat;
-import org.opencv.imgcodecs.Imgcodecs;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
@@ -16,18 +14,11 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.web.reactive.function.client.WebClient;
 
-import java.awt.*;
-import java.io.File;
-import java.io.IOException;
-import java.net.URISyntaxException;
-import java.util.*;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
+import java.util.Random;
 import java.util.concurrent.ExecutorService;
-
-import static com.lr.business.CoreMechanics.CONVERT_IMG_FLAG;
-import static com.lr.utils.ScreenUtils.*;
+import java.util.concurrent.TimeUnit;
 
 @SpringBootApplication
 @EnableConfigurationProperties({GeneralConfig.class, MarchConfig.class})
@@ -42,6 +33,9 @@ public class ChaosBot implements CommandLineRunner {
     private final WebClient discordWebClient;
     private final com.lr.config.Beans.RobotFactory robotFactory;
 
+    // Track workers for graceful shutdown
+    private final List<WindowAutomationWorker> workers = new ArrayList<>();
+
     @Autowired
     public ChaosBot(CoreMechanics coreMechanics, ExecutorService executorService, Random random,
                    GeneralConfig generalConfig, MarchConfig marchConfig, WebClient discordWebClient,
@@ -53,6 +47,41 @@ public class ChaosBot implements CommandLineRunner {
         this.marchConfig = marchConfig;
         this.discordWebClient = discordWebClient;
         this.robotFactory = robotFactory;
+    }
+
+    /**
+     * Graceful shutdown handler - called by Spring on application shutdown (Ctrl+C, SIGTERM).
+     */
+    @PreDestroy
+    public void onShutdown() {
+        log.info("Shutdown signal received. Initiating graceful shutdown...");
+
+        // Signal all workers to stop
+        workers.forEach(WindowAutomationWorker::requestShutdown);
+        log.info("Shutdown requested for all {} workers", workers.size());
+
+        // Shutdown executor
+        executorService.shutdown();
+        log.info("Executor shutdown initiated. Waiting for workers to complete...");
+
+        try {
+            // Wait up to 30 seconds for workers to finish gracefully
+            if (!executorService.awaitTermination(30, TimeUnit.SECONDS)) {
+                log.warn("Workers did not terminate in time. Forcing shutdown...");
+                executorService.shutdownNow();
+
+                // Wait a bit more for forced shutdown
+                if (!executorService.awaitTermination(10, TimeUnit.SECONDS)) {
+                    log.error("Workers did not respond to forced shutdown!");
+                }
+            } else {
+                log.info("All workers terminated gracefully.");
+            }
+        } catch (InterruptedException e) {
+            log.error("Interrupted during shutdown", e);
+            executorService.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
 
 
@@ -70,43 +99,45 @@ public class ChaosBot implements CommandLineRunner {
         List<WinUtils.WindowInfo> hwndList = WinUtils.findAllWindowsMatching(pidsBS, generalConfig.getWindowsNames());
         log.info("Windows matching config found: {}", hwndList.size());
 
+        if (hwndList.isEmpty()) {
+            log.warn("No windows found matching configuration. Exiting.");
+            return;
+        }
 
+        // Submit all window tasks to the executor using WindowAutomationWorker
+        hwndList.forEach(windowInfo -> {
+            // Create a worker for each window
+            WindowAutomationWorker worker = new WindowAutomationWorker(
+                windowInfo,
+                coreMechanics,
+                generalConfig,
+                marchConfig,
+                discordWebClient,
+                random,
+                robotFactory
+            );
+
+            // Track worker for shutdown (accessed by @PreDestroy)
+            workers.add(worker);
+
+            // Submit worker to executor
+            executorService.execute(worker);
+            log.info("Submitted worker for window: {}", windowInfo.getTitle());
+        });
+
+        log.info("Submitted {} window tasks to executor. Bot is now running...", hwndList.size());
+        log.info("Press Ctrl+C to stop the bot gracefully.");
+
+        // Keep main thread alive - wait for executor to terminate
+        // (This will block until @PreDestroy shuts down the executor on Ctrl+C)
         try {
-            // Submit all window tasks to the executor using WindowAutomationWorker
-            hwndList.forEach(windowInfo -> {
-                // Create a worker for each window
-                com.lr.business.WindowAutomationWorker worker = new com.lr.business.WindowAutomationWorker(
-                    windowInfo,
-                    coreMechanics,
-                    generalConfig,
-                    marchConfig,
-                    discordWebClient,
-                    random,
-                    robotFactory
-                );
-
-                // Submit worker to executor
-                executorService.execute(worker);
-                log.info("Submitted worker for window: {}", windowInfo.getTitle());
-            });
-
-            log.info("Submitted {} window tasks to executor", hwndList.size());
-
-            // Shutdown executor and wait for tasks to complete
-            executorService.shutdown();
-            log.info("Executor shutdown initiated. Waiting for tasks to complete...");
-
-            // Wait for all tasks to complete (or timeout after 1 hour per window)
-            if (!executorService.awaitTermination(hwndList.size() * 60L, java.util.concurrent.TimeUnit.MINUTES)) {
-                log.warn("Executor did not terminate in the specified time. Forcing shutdown...");
-                executorService.shutdownNow();
-            } else {
-                log.info("All window tasks completed successfully.");
+            // Wait indefinitely - shutdown is handled by @PreDestroy
+            while (!executorService.isTerminated()) {
+                executorService.awaitTermination(1, TimeUnit.HOURS);
             }
-
+            log.info("All workers completed. Exiting.");
         } catch (InterruptedException e) {
-            log.error("Main thread interrupted during executor shutdown", e);
-            executorService.shutdownNow();
+            log.info("Main thread interrupted, shutting down...");
             Thread.currentThread().interrupt();
         }
     }
