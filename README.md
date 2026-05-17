@@ -113,13 +113,20 @@ java -jar chaos-conquest-bot.jar \
 ## 🎯 Supported Actions
 
 ### Resource Farming (RSS_FARMING)
-```bash
-# Farm all resource types
---general.actionType=RSS_FARMING --farm.targetRssLevel=ALL
+Supported resources: `IRON`, `STONE`, `FOOD`, `LEAD`, `WOOD`, `WARPSTONE`, `RELIC` (WARPSTONE and RELIC are event resources that require scrolling to locate).
 
-# Farm specific resource
+```bash
+# Farm a specific resource at all levels (1–10 random)
+--general.actionType=RSS_FARMING --farm.rssType=IRON --farm.targetRssLevel=ALL
+
+# Farm a specific resource at a fixed tile level
 --general.actionType=RSS_FARMING --farm.rssType=IRON --farm.targetRssLevel=10
 ```
+
+`farm.rssType` accepts a specific name (e.g. `IRON`) or one of three random-selection modes:
+- `ALL` — pick any resource each march, event resources included
+- `ALL_WO_RELIC` — exclude only RELIC (keep WARPSTONE)
+- `ALL_WO_EVENTS` — only standard resources (no WARPSTONE, no RELIC)
 
 ### Army Farming (ARMY_FARMING)
 ```bash
@@ -190,7 +197,10 @@ java -jar chaos-conquest-bot.jar \
 
 - **Current Version**: 0.0.2-SNAPSHOT
 - **Java Version**: JDK 21
-- **Spring Boot**: 3.2.2
+- **Spring Boot**: 4.0.6
+- **OpenCV**: 4.9.0 (computer vision)
+- **Tess4J**: 5.18.0 (OCR)
+- **JNA**: 5.18.1 (Windows native API)
 - **Platform**: Windows (BlueStacks, Steam)
 
 ## 🔗 Links
