@@ -10,9 +10,16 @@ name: Java CI with Maven
 
 on:
   push:
-    branches: [ "**" ]  # Trigger on all branches
+    # Only main: a branch with a PR is already built by the pull_request event. Pushing every
+    # branch ran the whole pipeline twice per Dependabot PR, two NVD downloads on one API key.
+    branches: [ main ]
   pull_request:
     branches: [ "**" ]  # Trigger on PRs to any branch
+
+# A new commit on a PR supersedes the run of the previous one; main runs are never cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Default least-privilege token for every job. The security-scan job
 # overrides this with `contents: write` to submit the dependency graph.
@@ -38,7 +45,7 @@ jobs:
         cache: maven
 
     - name: Cache Maven packages
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.m2
         key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
@@ -117,6 +124,9 @@ jobs:
     name: Security Scan
     runs-on: ubuntu-latest
     needs: build-and-test
+    # With the NVD database restored from the cache this takes a few minutes. Without the limit a
+    # cold download from a slow NVD API ran into GitHub's 6-hour ceiling.
+    timeout-minutes: 30
     # Required permissions for dependency submission
     permissions:
       contents: write
@@ -132,12 +142,21 @@ jobs:
         distribution: 'temurin'
         cache: maven
 
-    - name: Cache OWASP Dependency Check Database
-      uses: actions/cache@v3
+    # The database is built and refreshed by nvd-cache.yml on main; scans only read it (PRs can
+    # restore caches saved on the default branch). The PR's own pom.xml hash no longer matters.
+    - name: Restore NVD database
+      id: nvd
+      uses: actions/cache/restore@v4
       with:
         path: ~/.dependency-check/data
-        key: ${{ runner.os }}-dependency-check-${{ hashFiles('**/pom.xml') }}
-        restore-keys: ${{ runner.os }}-dependency-check-
+        key: nvd-db-${{ github.run_id }}
+        restore-keys: nvd-db-
+
+    - name: Require the NVD database
+      if: steps.nvd.outputs.cache-matched-key == ''
+      run: |
+        echo "::error::No NVD database in the cache. Run the 'NVD database' workflow (Actions tab) once; it refreshes daily after that."
+        exit 1
 
     - name: Run OWASP Dependency Check
       run: |
