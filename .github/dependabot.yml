@@ -12,12 +12,15 @@ updates:
     groups:
     # Specify a name for the group, which will be used in pull request titles
     # and branch names
+      # Minor and patch updates only. Major versions are left out of the group on purpose: each
+      # one arrives as its own PR, so a single breaking upgrade no longer holds back every
+      # routine update in the same batch (the dependency bot merges these; majors wait for a
+      # human, with an analysis attached).
       deps:
         applies-to: version-updates
         update-types:
           - "minor"
           - "patch"
-          - "major"
       security:
         applies-to: security-updates
         patterns:

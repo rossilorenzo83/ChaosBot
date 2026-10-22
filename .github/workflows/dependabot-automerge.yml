@@ -1,0 +1,47 @@
+# Minor and patch updates from Dependabot merge themselves once CI is green.
+#
+# The "Main" ruleset requires a code-owner approval and the three CI checks below. This workflow gives the
+# approval (as the code owner, through AUTOMERGE_TOKEN, a fine-grained token limited to this repository and
+# stored as a Dependabot secret) and turns on auto-merge; GitHub then merges only when Build and Test, Code
+# Quality Analysis and Security Scan pass. A new commit from Dependabot dismisses the approval (ruleset) and
+# this workflow approves the new commit again.
+#
+# Major versions are left alone: the dependency bot (depbot) analyses them and a human merges.
+
+name: Dependabot auto-merge
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  automerge:
+    # Only Dependabot's own PRs, never a fork or a human pushing to a dependabot branch.
+    if: github.event.pull_request.user.login == 'dependabot[bot]' && github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+    - name: Read the update type
+      id: meta
+      uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Approve and enable auto-merge (minor and patch only)
+      if: steps.meta.outputs.update-type == 'version-update:semver-minor' || steps.meta.outputs.update-type == 'version-update:semver-patch'
+      env:
+        GH_TOKEN: ${{ secrets.AUTOMERGE_TOKEN }}
+        PR_URL: ${{ github.event.pull_request.html_url }}
+      run: |
+        gh pr review --approve --body "Minor/patch update: approved for auto-merge once CI is green." "$PR_URL"
+        gh pr merge --auto --squash "$PR_URL"
+
+    - name: Leave majors to a human
+      if: steps.meta.outputs.update-type == 'version-update:semver-major'
+      env:
+        DEPS: ${{ steps.meta.outputs.dependency-names }}
+      run: echo "Major version of $DEPS, not auto-merged; depbot analyses it and a human merges."
