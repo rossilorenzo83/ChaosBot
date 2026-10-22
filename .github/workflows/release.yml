@@ -1,27 +1,31 @@
-# One click releases ChaosBot: Actions -> Release -> Run workflow, choose patch / minor / major (or type a version).
+# One click releases ChaosBot: Actions -> Release -> Run workflow (from main).
 #
-# The version is not stored in pom.xml (it says ${revision}, 0-SNAPSHOT by default), so a release needs no pull
-# request: this workflow computes the next version from the last vX.Y.Z tag, builds and tests with
-# -Drevision=X.Y.Z, then creates the tag on the commit it built and the GitHub release with the JAR and notes
-# generated from the merged pull requests. See BUILD.md, "Release Process".
+# main always carries the next development version (X.Y.Z-SNAPSHOT in pom.xml). This workflow:
+#   1. releases X.Y.Z (or the version you type), tests it exactly as CI does and packages the JAR;
+#   2. commits "Release X.Y.Z", tags it vX.Y.Z, commits the next development version (X.Y.Z+1-SNAPSHOT unless
+#      you type another), and pushes the two commits and the tag to main in one atomic push;
+#   3. publishes the GitHub release with the JAR and notes generated from the merged pull requests.
+#
+# main only accepts pull requests; the push goes through because RELEASE_TOKEN (an Actions secret) is a
+# fine-grained token of the repository owner, who is in the ruleset's bypass list. If main moved while the
+# release was building, the atomic push is rejected and nothing is tagged or published: run it again.
 
 name: Release
 
 on:
   workflow_dispatch:
     inputs:
-      bump:
-        description: "Which part of the last version to increase"
-        type: choice
-        options: [patch, minor, major]
-        default: minor
       version:
-        description: "Exact version instead (e.g. 1.0.0); leave empty to use the bump"
+        description: "Version to release (empty: pom.xml's version without -SNAPSHOT)"
+        required: false
+        default: ""
+      next:
+        description: "Next development version (empty: next patch, e.g. 1.0.1-SNAPSHOT)"
         required: false
         default: ""
 
 permissions:
-  contents: write   # create the tag and the release
+  contents: write   # the release itself; the push to main uses RELEASE_TOKEN
 
 concurrency:
   group: release
@@ -43,34 +47,8 @@ jobs:
     - name: Checkout Source
       uses: actions/checkout@v4
       with:
-        fetch-depth: 0   # tags, to find the last version
-
-    - name: Work out the version
-      id: version
-      env:
-        BUMP: ${{ inputs.bump }}
-        EXACT: ${{ inputs.version }}
-      run: |
-        last=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)
-        last=${last#v}; last=${last:-0.0.0}
-        if [ -n "$EXACT" ]; then
-          version="${EXACT#v}"
-        else
-          IFS=. read -r major minor patch <<< "$last"
-          case "$BUMP" in
-            major) version="$((major + 1)).0.0" ;;
-            minor) version="$major.$((minor + 1)).0" ;;
-            *)     version="$major.$minor.$((patch + 1))" ;;
-          esac
-        fi
-        if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-          echo "::error::'$version' is not a version like 1.2.3"; exit 1
-        fi
-        if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
-          echo "::error::v$version already exists"; exit 1
-        fi
-        echo "Last release: ${last}, releasing: ${version}"
-        echo "version=$version" >> "$GITHUB_OUTPUT"
+        fetch-depth: 0                          # tags, to refuse a version that exists
+        token: ${{ secrets.RELEASE_TOKEN }}     # so the final push may bypass the ruleset
 
     - name: Set up JDK 21
       uses: actions/setup-java@v4
@@ -79,26 +57,73 @@ jobs:
         distribution: 'temurin'
         cache: maven
 
+    - name: Work out the versions
+      id: v
+      env:
+        VERSION_IN: ${{ inputs.version }}
+        NEXT_IN: ${{ inputs.next }}
+      run: |
+        current=$(mvn -B -q -DforceStdout help:evaluate -Dexpression=project.version)
+        version="${VERSION_IN#v}"
+        version="${version:-${current%-SNAPSHOT}}"
+        if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "::error::'$version' is not a release version like 1.2.3 (pom.xml says $current)"; exit 1
+        fi
+        if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+          echo "::error::v$version already exists"; exit 1
+        fi
+        if [ -n "$NEXT_IN" ]; then
+          next="$NEXT_IN"
+        else
+          IFS=. read -r major minor patch <<< "$version"
+          next="$major.$minor.$((patch + 1))-SNAPSHOT"
+        fi
+        if ! [[ "$next" =~ ^[0-9]+\.[0-9]+\.[0-9]+-SNAPSHOT$ ]]; then
+          echo "::error::next version '$next' must look like 1.2.4-SNAPSHOT"; exit 1
+        fi
+        echo "pom.xml: $current -> release $version -> next $next"
+        echo "version=$version" >> "$GITHUB_OUTPUT"
+        echo "next=$next" >> "$GITHUB_OUTPUT"
+
+    - name: Set the release version
+      run: mvn -B -q versions:set -DnewVersion=${{ steps.v.outputs.version }} -DgenerateBackupPoms=false
+
     # The same commands as the Build and Test job in maven.yml (UtilsUnitTest needs a display).
     - name: Run Unit Tests
-      run: mvn -B test "-Dtest=!*UtilsUnitTest*" -DfailIfNoTests=false -Drevision=${{ steps.version.outputs.version }}
+      run: mvn -B test "-Dtest=!*UtilsUnitTest*" -DfailIfNoTests=false
 
     - name: Run Integration Tests
-      run: mvn -B verify -DskipUnitTests -Drevision=${{ steps.version.outputs.version }}
+      run: mvn -B verify -DskipUnitTests
 
     - name: Package
-      run: mvn -B package -DskipTests -Drevision=${{ steps.version.outputs.version }}
+      run: mvn -B package -DskipTests
+
+    - name: Commit, tag, move to the next development version, push
+      env:
+        VERSION: ${{ steps.v.outputs.version }}
+        NEXT: ${{ steps.v.outputs.next }}
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git commit -q -am "Release $VERSION"
+        git tag -a "v$VERSION" -m "ChaosBot $VERSION"
+        mvn -B -q versions:set -DnewVersion="$NEXT" -DgenerateBackupPoms=false
+        git commit -q -am "Next development version $NEXT"
+        git push --atomic origin "HEAD:refs/heads/main" "refs/tags/v$VERSION"
 
     - name: Publish the release
       env:
         GH_TOKEN: ${{ github.token }}
-        VERSION: ${{ steps.version.outputs.version }}
+        VERSION: ${{ steps.v.outputs.version }}
       run: |
         jar="target/chaos-conquest-bot-${VERSION}.jar"
         test -f "$jar" || { echo "::error::$jar was not built"; ls target; exit 1; }
         gh release create "v${VERSION}" "$jar" \
-          --target "$GITHUB_SHA" \
+          --verify-tag \
           --title "ChaosBot ${VERSION}" \
           --generate-notes
-        echo "### Released ChaosBot ${VERSION}" >> "$GITHUB_STEP_SUMMARY"
-        echo "https://github.com/${GITHUB_REPOSITORY}/releases/tag/v${VERSION}" >> "$GITHUB_STEP_SUMMARY"
+        {
+          echo "### Released ChaosBot ${VERSION}"
+          echo "https://github.com/${GITHUB_REPOSITORY}/releases/tag/v${VERSION}"
+          echo "main is now at ${{ steps.v.outputs.next }}"
+        } >> "$GITHUB_STEP_SUMMARY"

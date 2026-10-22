@@ -144,31 +144,33 @@ mvn dependency:analyze
 ### Release Workflow (`.github/workflows/release.yml`)
 
 **Trigger**: Actions → Release → Run workflow (from `main`)
-**Inputs**: `bump` (patch / minor / major, default minor) or an exact `version`
+**Inputs** (both optional): `version` to release (default: `pom.xml`'s version without `-SNAPSHOT`), `next`
+development version (default: the next patch, e.g. `1.0.1-SNAPSHOT`)
 **Environment**: Ubuntu latest, JDK 21
 
 **Steps**:
-1. Compute the version from the last `vX.Y.Z` tag and the bump (or take the exact one); refuse one that exists
-2. Run the tests exactly as CI does, with `-Drevision=X.Y.Z`
-3. Package `chaos-conquest-bot-X.Y.Z.jar`
-4. Create the tag `vX.Y.Z` on the commit it built and the GitHub release, JAR attached, notes generated from the
-   merged pull requests
+1. Work out the versions; refuse a release version that exists or is not `X.Y.Z`
+2. Set the release version, run the tests exactly as CI does, package `chaos-conquest-bot-X.Y.Z.jar`
+3. Commit "Release X.Y.Z", tag `vX.Y.Z`, commit "Next development version X.Y.Z+1-SNAPSHOT", push the two
+   commits and the tag to `main` atomically (with `RELEASE_TOKEN`, the owner's token, who may bypass the ruleset)
+4. Publish the GitHub release with the JAR and notes generated from the merged pull requests
 
 ## Release Process
 
 ### Version Management
 - **Released versions**: see [Releases](https://github.com/rossilorenzo83/ChaosBot/releases)
 - **Version Format**: Semantic versioning (MAJOR.MINOR.PATCH)
-- **No version in the repository**: `pom.xml` has `<version>${revision}</version>` (Maven "CI-friendly
-  versions"), `0-SNAPSHOT` by default. The release workflow supplies the real one, so a release needs no pull
-  request and there is no SNAPSHOT bump afterwards.
+- **SNAPSHOT Suffix**: `main` always carries the next development version (`pom.xml`); the release workflow
+  moves it forward
 
 ### Release Steps
 1. Actions → **Release** → **Run workflow**, branch `main`.
-2. Choose `patch`, `minor` or `major` (or type a version such as `2.0.0`).
-3. The workflow tests, packages and publishes `vX.Y.Z`. Done.
+2. Leave the inputs empty to release the version in `pom.xml`, or type one (`version: 1.1.0` for a minor release;
+   `next` then defaults to `1.1.1-SNAPSHOT`).
+3. The workflow tests, packages, tags, publishes, and leaves `main` on the next SNAPSHOT. Done.
 
-A local build of a given version: `mvn package -Drevision=1.2.3`.
+If `main` moved while the release was building, its push is rejected and nothing is tagged or published: run it
+again.
 
 ### Release Artifacts
 - **Executable JAR**: `chaos-conquest-bot-X.Y.Z.jar`
@@ -268,7 +270,7 @@ The project now includes comprehensive test coverage with the following test typ
 ```xml
 <groupId>com.lr</groupId>
 <artifactId>chaos-conquest-bot</artifactId>
-<version>${revision}</version>
+<version>1.0.0-SNAPSHOT</version>
 ```
 
 #### Parent POM
