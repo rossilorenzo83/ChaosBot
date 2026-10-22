@@ -3,9 +3,12 @@
 
     <groupId>com.lr</groupId>
     <artifactId>chaos-conquest-bot</artifactId>
-    <version>1.0.0</version>
+    <version>${revision}</version>
 
     <properties>
+        <!-- The version is not kept here: the Release workflow builds with -Drevision=X.Y.Z (Actions ->
+             Release -> Run workflow). Local and CI builds are 0-SNAPSHOT. See BUILD.md, "Release Process". -->
+        <revision>0-SNAPSHOT</revision>
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

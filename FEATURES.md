@@ -207,6 +207,6 @@ farm.rssType = IRON  # Supported: IRON, STONE, FOOD, LEAD, WOOD, WARPSTONE
 ---
 
 **Last Updated**: August 2025  
-**Version**: 1.0.0  
+**Version**: see [Releases](https://github.com/rossilorenzo83/ChaosBot/releases)  
 **Compatibility**: Chaos Conquest Game  
 **Supported Platforms**: Windows (BlueStacks, Steam) 
