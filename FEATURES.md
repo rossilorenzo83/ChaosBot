@@ -207,6 +207,6 @@ farm.rssType = IRON  # Supported: IRON, STONE, FOOD, LEAD, WOOD, WARPSTONE
 ---
 
 **Last Updated**: August 2025  
-**Version**: 0.0.2-SNAPSHOT  
+**Version**: 1.0.0  
 **Compatibility**: Chaos Conquest Game  
 **Supported Platforms**: Windows (BlueStacks, Steam) 

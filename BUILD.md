@@ -138,75 +138,41 @@ mvn dependency:analyze
    - Check for dependency updates
 
 3. **Security Scan**
-   - OWASP dependency check
-   - Update dependency graph for security alerts
+   - OSV-Scanner over the resolved dependency tree (osv.dev); fails on CVSS >= 7, every finding in the run summary
+   - Update dependency graph for security alerts (pushes to `main` only)
 
 ### Release Workflow (`.github/workflows/release.yml`)
 
-**Triggers**: Manual workflow dispatch
+**Trigger**: pushing a tag `vX.Y.Z`
 **Environment**: Ubuntu latest, JDK 21
 
-**Inputs**:
-- `branch`: Source branch (default: master)
-- `releaseVersion`: Version to release (default: X.Y.Z)
-- `developmentVersion`: Next dev version (default: X.Y.Z-SNAPSHOT)
-- `dryRun`: Test run flag (default: false)
-
 **Steps**:
-1. Checkout specified branch
-2. Setup JDK 17
-3. Configure Git user
-4. Build with tests: `mvn -B clean verify`
-5. Prepare release: `mvn release:prepare`
-6. Perform release: `mvn release:perform`
-7. Create GitHub release
-8. Upload release assets
+1. Check that the tag matches the version in `pom.xml` (a `v1.2.0` tag on a `1.1.0` pom fails)
+2. Run the tests exactly as CI does
+3. Package the executable JAR
+4. Publish the GitHub release with the JAR attached and notes generated from the merged pull requests
 
 ## Release Process
 
 ### Version Management
-- **Current Version**: 0.0.2-SNAPSHOT
+- **Released versions**: see [Releases](https://github.com/rossilorenzo83/ChaosBot/releases)
 - **Version Format**: Semantic versioning (MAJOR.MINOR.PATCH)
-- **SNAPSHOT Suffix**: Development versions
+- **SNAPSHOT Suffix**: development versions on `main` between releases
 
 ### Release Steps
 
-#### 1. Pre-release Preparation
-```bash
-# Ensure clean working directory
-git status
+`main` only accepts changes through pull requests, so a release is two of them and a tag:
 
-# Update version in pom.xml if needed
-mvn versions:set -DnewVersion=X.Y.Z
-
-# Run full test suite
-mvn clean verify
-```
-
-#### 2. Manual Release via GitHub Actions
-1. Navigate to Actions tab in GitHub
-2. Select "Maven Release & GitHub Deployment"
-3. Click "Run workflow"
-4. Fill in release parameters:
-   - Branch: main
-   - Release Version: X.Y.Z
-   - Development Version: X.Y.Z-SNAPSHOT
-   - Dry Run: false
-
-#### 3. Automated Release Process
-The workflow automatically:
-- Creates release branch
-- Updates version numbers
-- Runs tests
-- Creates Git tags
-- Builds release artifacts
-- Creates GitHub release
-- Uploads JAR file
+1. **Release PR**: set the version in `pom.xml` (`mvn versions:set -DnewVersion=X.Y.Z -DgenerateBackupPoms=false`),
+   update the docs that mention it, merge.
+2. **Tag the merge commit**: `git tag vX.Y.Z <merge commit> && git push origin vX.Y.Z`. The release workflow
+   tests, packages and publishes the release.
+3. **Next development version PR**: `mvn versions:set -DnewVersion=X.Y.(Z+1)-SNAPSHOT -DgenerateBackupPoms=false`.
 
 ### Release Artifacts
 - **Executable JAR**: `chaos-conquest-bot-X.Y.Z.jar`
-- **Source Distribution**: Source code archive
-- **Documentation**: README and configuration files
+- **Source Distribution**: source code archives GitHub attaches to every release
+- **Release notes**: generated from the pull requests merged since the previous release
 
 ## Local Development Setup
 
@@ -247,7 +213,7 @@ mvn verify -DskipUnitTests  # Integration tests only
 mvn package
 
 # 6. Run application
-java -jar target/chaos-conquest-bot-0.0.2-SNAPSHOT.jar
+java -jar target/chaos-conquest-bot-*.jar
 ```
 
 ### Test-Driven Development Workflow
@@ -301,7 +267,7 @@ The project now includes comprehensive test coverage with the following test typ
 ```xml
 <groupId>com.lr</groupId>
 <artifactId>chaos-conquest-bot</artifactId>
-<version>0.0.2-SNAPSHOT</version>
+<version>1.0.0</version>
 ```
 
 #### Parent POM

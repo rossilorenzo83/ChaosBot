@@ -20,7 +20,7 @@ ChaosBot leverages computer vision (OpenCV) and OCR (Tess4J) to automate repetit
 ```bash
 # Download latest release from GitHub
 # Run the JAR file
-java -jar chaos-conquest-bot-0.0.2.jar --general.windowsNames[0]=YourGameWindow
+java -jar chaos-conquest-bot-1.0.0.jar --general.windowsNames[0]=YourGameWindow
 ```
 
 ### Development Build
@@ -33,7 +33,7 @@ cd ChaosBot
 mvn clean package
 
 # Run with custom parameters
-java -jar target/chaos-conquest-bot-0.0.2-SNAPSHOT.jar \
+java -jar target/chaos-conquest-bot-*.jar \
   --general.windowsNames[0]=YourGameWindow \
   --general.actionType=RSS_FARMING \
   --farm.marchesAvailable=3
@@ -195,7 +195,7 @@ java -jar chaos-conquest-bot.jar \
 
 ## 📦 Release Information
 
-- **Current Version**: 0.0.2-SNAPSHOT
+- **Current Version**: see [Releases](https://github.com/rossilorenzo83/ChaosBot/releases)
 - **Java Version**: JDK 21
 - **Spring Boot**: 4.0.6
 - **OpenCV**: 4.9.0 (computer vision)
