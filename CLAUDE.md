@@ -23,7 +23,7 @@ mvn clean test jacoco:report  # Code coverage
 
 ### Run Application
 ```bash
-java -jar target/chaos-conquest-bot-0.0.2-SNAPSHOT.jar \
+java -jar target/chaos-conquest-bot-*.jar \
   --general.windowsNames[0]=YourGameWindow \
   --general.actionType=RSS_FARMING
 ```

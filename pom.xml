@@ -3,7 +3,7 @@
 
     <groupId>com.lr</groupId>
     <artifactId>chaos-conquest-bot</artifactId>
-    <version>0.0.2-SNAPSHOT</version>
+    <version>1.0.0-SNAPSHOT</version>
 
     <properties>
         <maven.compiler.source>21</maven.compiler.source>

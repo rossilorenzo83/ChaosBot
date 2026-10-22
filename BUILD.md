@@ -138,75 +138,44 @@ mvn dependency:analyze
    - Check for dependency updates
 
 3. **Security Scan**
-   - OWASP dependency check
-   - Update dependency graph for security alerts
+   - OSV-Scanner over the resolved dependency tree (osv.dev); fails on CVSS >= 7, every finding in the run summary
+   - Update dependency graph for security alerts (pushes to `main` only)
 
 ### Release Workflow (`.github/workflows/release.yml`)
 
-**Triggers**: Manual workflow dispatch
+**Trigger**: Actions → Release → Run workflow (from `main`)
+**Inputs** (both optional): `version` to release (default: `pom.xml`'s version without `-SNAPSHOT`), `next`
+development version (default: the next patch, e.g. `1.0.1-SNAPSHOT`)
 **Environment**: Ubuntu latest, JDK 21
 
-**Inputs**:
-- `branch`: Source branch (default: master)
-- `releaseVersion`: Version to release (default: X.Y.Z)
-- `developmentVersion`: Next dev version (default: X.Y.Z-SNAPSHOT)
-- `dryRun`: Test run flag (default: false)
-
 **Steps**:
-1. Checkout specified branch
-2. Setup JDK 17
-3. Configure Git user
-4. Build with tests: `mvn -B clean verify`
-5. Prepare release: `mvn release:prepare`
-6. Perform release: `mvn release:perform`
-7. Create GitHub release
-8. Upload release assets
+1. Work out the versions; refuse a release version that exists or is not `X.Y.Z`
+2. Set the release version, run the tests exactly as CI does, package `chaos-conquest-bot-X.Y.Z.jar`
+3. Commit "Release X.Y.Z", tag `vX.Y.Z`, commit "Next development version X.Y.Z+1-SNAPSHOT", push the two
+   commits and the tag to `main` atomically (with `RELEASE_TOKEN`, the owner's token, who may bypass the ruleset)
+4. Publish the GitHub release with the JAR and notes generated from the merged pull requests
 
 ## Release Process
 
 ### Version Management
-- **Current Version**: 0.0.2-SNAPSHOT
+- **Released versions**: see [Releases](https://github.com/rossilorenzo83/ChaosBot/releases)
 - **Version Format**: Semantic versioning (MAJOR.MINOR.PATCH)
-- **SNAPSHOT Suffix**: Development versions
+- **SNAPSHOT Suffix**: `main` always carries the next development version (`pom.xml`); the release workflow
+  moves it forward
 
 ### Release Steps
+1. Actions → **Release** → **Run workflow**, branch `main`.
+2. Leave the inputs empty to release the version in `pom.xml`, or type one (`version: 1.1.0` for a minor release;
+   `next` then defaults to `1.1.1-SNAPSHOT`).
+3. The workflow tests, packages, tags, publishes, and leaves `main` on the next SNAPSHOT. Done.
 
-#### 1. Pre-release Preparation
-```bash
-# Ensure clean working directory
-git status
-
-# Update version in pom.xml if needed
-mvn versions:set -DnewVersion=X.Y.Z
-
-# Run full test suite
-mvn clean verify
-```
-
-#### 2. Manual Release via GitHub Actions
-1. Navigate to Actions tab in GitHub
-2. Select "Maven Release & GitHub Deployment"
-3. Click "Run workflow"
-4. Fill in release parameters:
-   - Branch: main
-   - Release Version: X.Y.Z
-   - Development Version: X.Y.Z-SNAPSHOT
-   - Dry Run: false
-
-#### 3. Automated Release Process
-The workflow automatically:
-- Creates release branch
-- Updates version numbers
-- Runs tests
-- Creates Git tags
-- Builds release artifacts
-- Creates GitHub release
-- Uploads JAR file
+If `main` moved while the release was building, its push is rejected and nothing is tagged or published: run it
+again.
 
 ### Release Artifacts
 - **Executable JAR**: `chaos-conquest-bot-X.Y.Z.jar`
-- **Source Distribution**: Source code archive
-- **Documentation**: README and configuration files
+- **Source Distribution**: source code archives GitHub attaches to every release
+- **Release notes**: generated from the pull requests merged since the previous release
 
 ## Local Development Setup
 
@@ -247,7 +216,7 @@ mvn verify -DskipUnitTests  # Integration tests only
 mvn package
 
 # 6. Run application
-java -jar target/chaos-conquest-bot-0.0.2-SNAPSHOT.jar
+java -jar target/chaos-conquest-bot-*.jar
 ```
 
 ### Test-Driven Development Workflow
@@ -301,7 +270,7 @@ The project now includes comprehensive test coverage with the following test typ
 ```xml
 <groupId>com.lr</groupId>
 <artifactId>chaos-conquest-bot</artifactId>
-<version>0.0.2-SNAPSHOT</version>
+<version>1.0.0-SNAPSHOT</version>
 ```
 
 #### Parent POM
