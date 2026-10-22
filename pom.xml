@@ -142,7 +142,8 @@
                     <ossIndexUsername>${env.OSS_INDEX_USERNAME}</ossIndexUsername>
                     <ossIndexPassword>${env.OSS_INDEX_PASSWORD}</ossIndexPassword>
                     <!-- Performance optimizations -->
-                    <dataDirectory>~/.dependency-check/data</dataDirectory>
+                    <!-- Maven does not expand ~: the literal path put the database in ./~ where the CI cache never saw it -->
+                    <dataDirectory>${user.home}/.dependency-check/data</dataDirectory>
                     <connectionTimeout>60000</connectionTimeout>
                     <readTimeout>60000</readTimeout>
                     <!-- Fallback configuration for when NVD is unavailable -->
