@@ -124,12 +124,20 @@ jobs:
     name: Security Scan
     runs-on: ubuntu-latest
     needs: build-and-test
-    # With the NVD database restored from the cache this takes a few minutes. Without the limit a
-    # cold download from a slow NVD API ran into GitHub's 6-hour ceiling.
-    timeout-minutes: 30
+    # OSV-Scanner queries osv.dev (GitHub Advisory Database, NVD-derived records, ecosystem feeds)
+    # per dependency: about 20 seconds, no API key. The OWASP Dependency Check it replaces had to
+    # download the whole NVD database through the NVD API first, which took longer than GitHub's
+    # 6-hour limit whenever the NVD was slow.
+    timeout-minutes: 10
     # Required permissions for dependency submission
     permissions:
       contents: write
+
+    env:
+      OSV_SCANNER_VERSION: v2.7.0
+      # Fail on any vulnerability scored at or above this CVSS (what <failOnCVSS>7</failOnCVSS> in
+      # pom.xml meant; that parameter name was never read by the plugin).
+      FAIL_ON_CVSS: 7
 
     steps:
     - name: Checkout Source
@@ -142,47 +150,51 @@ jobs:
         distribution: 'temurin'
         cache: maven
 
-    # The database is built and refreshed by nvd-cache.yml on main; scans only read it (PRs can
-    # restore caches saved on the default branch). The PR's own pom.xml hash no longer matters.
-    - name: Restore NVD database
-      id: nvd
-      uses: actions/cache/restore@v4
-      with:
-        path: ~/.dependency-check/data
-        key: nvd-db-${{ github.run_id }}
-        restore-keys: nvd-db-
-
-    - name: Require the NVD database
-      if: steps.nvd.outputs.cache-matched-key == ''
+    - name: Install OSV-Scanner
       run: |
-        echo "::error::No NVD database in the cache. Run the 'NVD database' workflow (Actions tab) once; it refreshes daily after that."
-        exit 1
+        base="https://github.com/google/osv-scanner/releases/download/${OSV_SCANNER_VERSION}"
+        curl -sSfL -o osv-scanner_linux_amd64 "$base/osv-scanner_linux_amd64"
+        curl -sSfL -o SHA256SUMS "$base/osv-scanner_SHA256SUMS"
+        grep ' osv-scanner_linux_amd64$' SHA256SUMS | sha256sum -c -
+        install -m 755 osv-scanner_linux_amd64 /usr/local/bin/osv-scanner
+        rm osv-scanner_linux_amd64 SHA256SUMS
 
-    - name: Run OWASP Dependency Check
+    - name: Scan dependencies for known vulnerabilities
       run: |
-        mvn -B org.owasp:dependency-check-maven:check \
-          -DnvdApiKey="$NVD_API_KEY" \
-          -DossIndexUsername="$OSS_INDEX_USERNAME" \
-          -DossIndexPassword="$OSS_INDEX_PASSWORD"
-      env:
-        # Credentials are read directly from these env vars by pom.xml
-        # via Maven's ${env.X} interpolation. Do NOT bake them into
-        # MAVEN_OPTS — ${VAR} inside a YAML env: value is a literal
-        # string, not a shell expansion.
-        NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
-        OSS_INDEX_USERNAME: ${{ secrets.OSS_INDEX_USERNAME }}
-        OSS_INDEX_PASSWORD: ${{ secrets.OSS_INDEX_PASSWORD }}
-        MAVEN_OPTS: "-Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN"
+        # Exit code 1 means "vulnerabilities found", which the next step judges by severity;
+        # anything else is a scanner failure.
+        set +e
+        osv-scanner scan source -r --format json . > osv-results.json
+        code=$?
+        set -e
+        if [ "$code" -gt 1 ]; then echo "::error::osv-scanner failed (exit $code)"; exit "$code"; fi
 
+    - name: Fail on severity ${{ env.FAIL_ON_CVSS }} or higher
+      run: |
+        jq -r '[.results[]?.packages[]? as $p | $p.groups[]?
+                | {pkg: "\($p.package.name) \($p.package.version)", sev: (.max_severity // ""), ids: (.ids | join(", "))}]
+               | sort_by(.sev | tonumber? // -1) | reverse
+               | (["| CVSS | Package | Advisories |", "|---|---|---|"] + map("| \(if .sev == "" then "?" else .sev end) | \(.pkg) | \(.ids) |"))
+               | .[]' osv-results.json > findings.md
+        count=$(( $(wc -l < findings.md) - 2 ))
+        {
+          echo "### Known vulnerabilities in dependencies: $count"
+          if [ "$count" -gt 0 ]; then cat findings.md; fi
+        } >> "$GITHUB_STEP_SUMMARY"
+        severe=$(jq --argjson t "$FAIL_ON_CVSS" \
+          '[.results[]?.packages[]?.groups[]? | (.max_severity // "" | tonumber? // 0) | select(. >= $t)] | length' \
+          osv-results.json)
+        if [ "$severe" -gt 0 ]; then
+          echo "::error::$severe vulnerabilit(y/ies) with CVSS >= $FAIL_ON_CVSS; see the run summary"
+          exit 1
+        fi
 
     - name: Upload Security Report
       uses: actions/upload-artifact@v4
       if: always()
       with:
         name: security-report
-        path: |
-          target/dependency-check-report.html
-          target/dependency-check-report.json
+        path: osv-results.json
 
     # Optional: Uploads the full dependency graph to GitHub to improve the quality of Dependabot alerts this repository can receive
     # Only runs on push events (not PRs) because PRs have limited token permissions
