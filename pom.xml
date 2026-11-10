@@ -207,7 +207,7 @@
             <dependency>
                 <groupId>io.netty</groupId>
                 <artifactId>netty-bom</artifactId>
-                <version>4.2.19.Final</version>
+                <version>4.2.20.Final</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -253,7 +253,7 @@
         <dependency>
             <groupId>net.sourceforge.tess4j</groupId>
             <artifactId>tess4j</artifactId>
-            <version>5.20.0</version>
+            <version>5.21.0</version>
         </dependency>
 
         <dependency>
